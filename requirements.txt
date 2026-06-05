@@ -8,3 +8,6 @@ pydantic
 alembic
 pytest
 httpx
+black
+ruff 
+pre-commit
