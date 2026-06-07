@@ -11,3 +11,7 @@ httpx
 black
 ruff 
 pre-commit
+pydantic-settings
+asyncpg
+passlib[bcrypt]
+pymysql
