@@ -1,37 +1,59 @@
 # pyrefly: ignore [missing-import]
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 # pyrefly: ignore [missing-import]
-from sqlalchemy.orm import Session
+from sqlalchemy import text
+# pyrefly: ignore [missing-import]
+from sqlalchemy.exc import SQLAlchemyError
+import time
+# pyrefly: ignore [missing-import]
+from app.core.database import SessionLocal
 from app.core.redis import redis_client
-from app.core.database import get_db
+# pyrefly: ignore [missing-import]
+from redis import RedisError
 
 router = APIRouter()
 
 @router.get("/")
-async def health_check(db: Session = Depends(get_db)):
-    # Check Redis status
-    redis_status = "connected"
-    try:
-        redis_client.ping()
-    except Exception:
-        redis_status = "disconnected"
+async def health_check():
+    start_time = time.time()
     
-    # Check Database status
+    # Check database connection
     db_status = "connected"
+    db_response_time = None
     try:
-        # Try to execute a simple query
-        db.execute("SELECT 1")
-    except Exception:
+        db_start = time.time()
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+        db_response_time = round((time.time() - db_start) * 1000, 2)
+    except SQLAlchemyError:
         db_status = "disconnected"
     
-    # Overall status
-    overall_status = "healthy" if redis_status == "connected" and db_status == "connected" else "degraded"
+    # Check Redis connection
+    redis_status = "connected"
+    redis_response_time = None
+    try:
+        redis_start = time.time()
+        redis_client.ping()
+        redis_response_time = round((time.time() - redis_start) * 1000, 2)
+    except RedisError:
+        redis_status = "disconnected"
+    
+    # Determine overall status
+    overall_status = "healthy" if db_status == "connected" and redis_status == "connected" else "degraded"
+    total_response_time = round((time.time() - start_time) * 1000, 2)
     
     return {
         "status": overall_status,
+        "timestamp": time.time(),
+        "response_time_ms": total_response_time,
         "services": {
-            "redis": redis_status,
-            "database": db_status
-        },
-        "timestamp": "2026-06-07T00:00:00Z"  # You can add actual timestamp here
+            "database": {
+                "status": db_status,
+                "response_time_ms": db_response_time
+            },
+            "redis": {
+                "status": redis_status,
+                "response_time_ms": redis_response_time
+            }
+        }
     }
