@@ -1,0 +1,13 @@
+
+
+
+# Development Tools
+black==26.5.1
+ruff==0.15.16
+pre_commit==4.6.0
+pytest==9.0.3
+pytest-cov==6.0.0
+pytest-asyncio==0.24.0
+
+# Type checking
+mypy==1.11.0
