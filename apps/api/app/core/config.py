@@ -1,5 +1,9 @@
+# pyrefly: ignore [missing-import]
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
+
+LOG_LEVEL: str = "INFO"
+
 
 class Settings(BaseSettings):
     APP_NAME: str = "Book Recommendation System"
