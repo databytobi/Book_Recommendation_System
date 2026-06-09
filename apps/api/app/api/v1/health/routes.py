@@ -13,10 +13,13 @@ from sqlalchemy.orm import Session
 from redis import RedisError
 from app.core.database import get_db
 from app.core.redis import redis_client
+from app.schemas.base import BaseAPIResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(
+    tags=["Health"]
+)
 
 @router.get("/")
 async def health_check(db: Session = Depends(get_db)):

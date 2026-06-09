@@ -8,6 +8,14 @@ from app.middleware.request_logging import RequestLoggingMiddleware
 from app.core.logging import setup_logging
 import logging
 
+from app.core.exceptions import APIException
+from app.core.handlers import api_exception_handler
+
+app.add_exception_handler(
+APIException,
+api_exception_handler
+)
+
 # Setup logging
 setup_logging()
 logger = logging.getLogger(__name__)
