@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
+
 # pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+
 # pyrefly: ignore [missing-import]
 from fastapi.exceptions import RequestValidationError
+
 # pyrefly: ignore [missing-import]
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
@@ -15,13 +18,14 @@ from app.core.handlers import (
     api_exception_handler,
     http_exception_handler,
     validation_exception_handler,
-    generic_exception_handler
+    generic_exception_handler,
 )
 import logging
 
 # Setup logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +40,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info(f"Shutting down {settings.APP_NAME}...")
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -59,6 +64,7 @@ app.include_router(health_router, prefix="/api/v1/health", tags=["Health"])
 # Add middleware
 app.add_middleware(RequestLoggingMiddleware)
 
+
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -66,8 +72,9 @@ async def root():
         "message": "Book Recommendation System API",
         "version": settings.APP_VERSION,
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
+
 
 @app.get("/health")
 async def health_check():
@@ -75,5 +82,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": settings.APP_NAME,
-        "version": settings.APP_VERSION
+        "version": settings.APP_VERSION,
     }

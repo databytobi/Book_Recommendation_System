@@ -4,16 +4,18 @@ from app.main import app
 from app.core.redis import redis_client
 import redis
 
+
 # Mock Redis for testing
 class MockRedis:
     def ping(self):
         return True
-    
+
     def get(self, key):
         return None
-    
+
     def set(self, key, value, ex=None):
         return True
+
 
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch):
@@ -23,6 +25,7 @@ def mock_redis(monkeypatch):
     monkeypatch.setattr(redis_client, "get", mock.get)
     monkeypatch.setattr(redis_client, "set", mock.set)
     return mock
+
 
 @pytest.fixture
 def client():

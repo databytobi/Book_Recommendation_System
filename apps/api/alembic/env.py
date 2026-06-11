@@ -9,6 +9,7 @@ from logging.config import fileConfig
 
 # pyrefly: ignore [missing-import]
 from sqlalchemy import engine_from_config
+
 # pyrefly: ignore [missing-import]
 from sqlalchemy import pool
 
@@ -27,6 +28,7 @@ print(f"Project root: {project_root}")
 try:
     from app.core.database import Base
     from app.core.config import settings
+
     print("Successfully imported app modules!")
 except ImportError as e:
     print(f"Import error: {e}")
@@ -45,6 +47,7 @@ config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 # Add your model's MetaData object here
 target_metadata = Base.metadata
 
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -57,6 +60,7 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+
 def run_migrations_online() -> None:
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
@@ -65,12 +69,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()
