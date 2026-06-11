@@ -1,0 +1,57 @@
+name: Backend CI
+
+on:
+push:
+branches:
+- main
+- develop
+
+pull_request:
+branches:
+- main
+- develop
+
+jobs:
+
+test:
+
+```
+runs-on: ubuntu-latest
+
+steps:
+
+  - name: Checkout Repository
+    uses: actions/checkout@v4
+
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.12"
+
+  - name: Install Dependencies
+    run: |
+      cd apps/api
+      pip install -r requirements.txt
+
+  - name: Run Ruff Linter
+    run: |
+      cd apps/api
+      ruff .
+
+  - name: Run Black Formatter Check
+    run: |
+      cd apps/api
+      black . --check
+
+  - name: Run Tests
+    run: |
+      cd apps/api
+      pytest
+```
+```
+  - name: Validate Docker Build
+    run: |
+      docker build \
+      -f infrastructure/docker/api/Dockerfile \
+      .
+```
