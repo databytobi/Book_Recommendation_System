@@ -1,0 +1,7 @@
+Interaction Matrix Statistics
+========================================
+Users: 14,220
+Items: 159,357
+Non-zero entries: 340,341
+Shape: (14220, 159357)
+Memory: 2.60 MB

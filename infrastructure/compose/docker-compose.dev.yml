@@ -1,4 +1,10 @@
+
+
 services:
+  # ============================================================
+  # API SERVICE
+  # ============================================================
+
   api:
     build:
       context: ../..
@@ -7,8 +13,19 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      # Application code (for development with hot reload)
       - ../../apps/api:/app
       - ../../requirements.txt:/requirements.txt
+
+      # Persistent ML artifacts - THIS IS THE KEY ADDITION
+      - ml_artifacts:/app/ml/artifacts
+      - ml_models:/app/ml/models
+
+      # Data volumes
+      - data_processed:/data/processed
+
+      # Logs
+      - logs:/logs
     env_file:
       - ../../.env.docker
     depends_on:
@@ -20,44 +37,270 @@ services:
     restart: unless-stopped
     networks:
       - book_network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "prometheus.scrape=true"
+      - "prometheus.port=8000"
+      - "prometheus.path=/metrics"
+
+  # ============================================================
+  # POSTGRES DATABASE
+  # ============================================================
 
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: book_postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
       POSTGRES_DB: book_recommendation
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d book_recommendation" ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
       - book_network
+    shm_size: 128mb
+
+  # ============================================================
+  # REDIS CACHE
+  # ============================================================
 
   redis:
-    image: redis:7
+    image: redis:7-alpine
     container_name: book_redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
       - book_network
 
+  # ============================================================
+  # PGADMIN (Optional - for database management)
+  # ============================================================
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: book_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@bookrec.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - book_network
+    profiles:
+      - dev
+      - tools
+
+  # ============================================================
+  # ML TRAINING SERVICE (Optional - for running training pipelines)
+  # ============================================================
+
+  ml-train:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/ml/Dockerfile
+    container_name: book_ml_train
+    volumes:
+      - ../../apps/api:/app
+      - ml_artifacts:/app/ml/artifacts
+      - ml_models:/app/ml/models
+      - data_processed:/data/processed
+    env_file:
+      - ../../.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - book_network
+    profiles:
+      - ml
+      - training
+    command: python -c "print('ML training container ready. Run training scripts manually.')"
+
+  # ============================================================
+  # PROMETHEUS SERVICE - NEW
+  # ============================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: book_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    networks:
+      - book_network
+    depends_on:
+      - api
+    profiles:
+      - monitoring
+      - dev
+
+  # ============================================================
+  # GRAFANA SERVICE - NEW
+  # ============================================================
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: book_grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    restart: unless-stopped
+    networks:
+      - book_network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+      - grafana
+      - dev
+
+  # ============================================================
+  # NODE EXPORTER (Optional - for system metrics)
+  # ============================================================
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: book_node_exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
+    restart: unless-stopped
+    networks:
+      - book_network
+    profiles:
+      - monitoring
+      - dev
+
+  # ============================================================
+  # CADVISOR (Optional - for container metrics)
+  # ============================================================
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: book_cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    networks:
+      - book_network
+    profiles:
+      - monitoring
+      - dev
+
+# ============================================================
+# VOLUMES
+# ============================================================
+
 volumes:
+  # Database volumes
   postgres_data:
+    name: book_postgres_data
+    driver: local
+
+  redis_data:
+    name: book_redis_data
+    driver: local
+
+  pgadmin_data:
+    name: book_pgadmin_data
+    driver: local
+
+  # ML Artifacts Volumes - PERSISTENT STORAGE
+  ml_artifacts:
+    name: book_ml_artifacts
+    driver: local
+
+  ml_models:
+    name: book_ml_models
+    driver: local
+
+  # Data volumes
+  data_processed:
+    name: book_data_processed
+    driver: local
+
+  # Logs volume
+  logs:
+    name: book_logs
+    driver: local
+
+  # NEW: Prometheus and Grafana volumes
+  prometheus_data:
+    name: book_prometheus_data
+    driver: local
+
+  grafana_data:
+    name: book_grafana_data
+    driver: local
+
+# ============================================================
+# NETWORKS
+# ============================================================
 
 networks:
   book_network:
+    name: book_network
     driver: bridge

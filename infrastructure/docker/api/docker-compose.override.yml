@@ -1,0 +1,27 @@
+version: '3.8'
+
+# Override configuration for development environment
+# This file is automatically used when running docker-compose up
+
+services:
+  api:
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - LOG_LEVEL=DEBUG
+    volumes:
+      # Mount local code for hot reload
+      - ../../apps/api:/app
+      - ../../ml:/app/ml
+      - ../../data:/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+
+  postgres:
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    ports:
+      - "6379:6379"
