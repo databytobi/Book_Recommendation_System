@@ -1,27 +1,22 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-
 # Python files
 *.py text eol=lf
-
 # Shell scripts
 *.sh text eol=lf
-
 # Batch files
 *.bat text eol=crlf
-
 # JSON and YAML
 *.json text eol=lf
 *.yaml text eol=lf
 *.yml text eol=lf
-
 # Markdown
 *.md text eol=lf
-
 # Git files
 .gitattributes text eol=lf
 .gitignore text eol=lf
-
 # Docker files
 Dockerfile text eol=lf
 .dockerignore text eol=lf
+*.pdf filter=lfs diff=lfs merge=lfs -text
+*.db filter=lfs diff=lfs merge=lfs -text
