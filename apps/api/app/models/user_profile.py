@@ -7,7 +7,6 @@ and behavioral characteristics for personalization.
 Phase: Database Models
 """
 
-from ctypes import Union
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import json
@@ -119,6 +118,8 @@ class UserProfile(Base):
         Average weekly reading hours
     preferred_book_length : str
         Preferred book length (short, medium, long)
+    reading_style : str
+        Preferred reading style (quick, balanced, deep, explorer)
     preferred_language : str
         Preferred reading language
     accessibility_needs : str
@@ -138,10 +139,10 @@ class UserProfile(Base):
     # ============================================================
     
     user_id = Column(
-        String(36),
+        Integer,
         primary_key=True,
         index=True,
-        doc="User identifier (UUID)"
+        doc="User identifier"
     )
     
     display_name = Column(
@@ -253,6 +254,14 @@ class UserProfile(Base):
         doc="Preferred book length: short, medium, long"
     )
     
+    reading_style = Column(
+        String(20),
+        nullable=False,
+        default="balanced",
+        index=True,
+        doc="Preferred reading style"
+    )
+    
     preferred_language = Column(
         String(10),
         default="en",
@@ -296,8 +305,12 @@ class UserProfile(Base):
     # ============================================================
     
     __table_args__ = (
-        # Indexes for common queries
-        #Index('ix_user_profiles_reading_personality', 'reading_personality'),
+        # Indexes for common queries.
+        # NOTE: `reading_personality` is declared with index=True on the
+        # column itself, which already creates an index named
+        # ix_user_profiles_reading_personality. Re-declaring it here produced
+        # a duplicate CREATE INDEX statement, so schema creation failed with
+        # "index ix_user_profiles_reading_personality already exists".
         Index('ix_user_profiles_books_per_year', 'books_per_year'),
         Index('ix_user_profiles_last_active', 'last_active_at'),
         Index('ix_user_profiles_onboarding', 'onboarding_completed'),
@@ -399,6 +412,7 @@ class UserProfile(Base):
         favorite_authors: Optional[List[str]] = None,
         discovery_preference: Optional[Union[str, DiscoveryPreference]] = None,
         discovery_score: float = 0.5,
+        reading_style: str = "balanced",
         preferred_language: str = "en",
         accessibility_needs: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None
@@ -430,6 +444,8 @@ class UserProfile(Base):
             Discovery preference
         discovery_score : float
             Discovery openness score
+        reading_style : str
+            Preferred reading style
         preferred_language : str
             Preferred language
         accessibility_needs : Optional[List[str]]
@@ -461,6 +477,7 @@ class UserProfile(Base):
             favorite_authors=json.dumps(favorite_authors) if favorite_authors else None,
             discovery_preference=discovery_preference,
             discovery_score=discovery_score,
+            reading_style=reading_style,
             preferred_language=preferred_language,
             accessibility_needs=json.dumps(accessibility_needs) if accessibility_needs else None,
             meta_data=json.dumps(metadata) if metadata else None,
@@ -705,6 +722,7 @@ class UserProfile(Base):
             "longest_streak_days": self.longest_streak_days,
             "weekly_reading_hours": self.weekly_reading_hours,
             "preferred_book_length": self.preferred_book_length,
+            "reading_style": self.reading_style,
             "preferred_language": self.preferred_language,
             "accessibility_needs": self.get_accessibility_needs(),
             "metadata": self.get_metadata(),
@@ -728,6 +746,7 @@ class UserProfile(Base):
             "bio": self.bio,
             "avatar_url": self.avatar_url,
             "reading_personality_display": self.reading_personality_display,
+            "reading_style": self.reading_style,
             "favorite_genres": self.get_favorite_genres(),
             "favorite_authors": self.get_favorite_authors(),
             "books_per_year": self.books_per_year,
@@ -891,6 +910,8 @@ if __name__ == "__main__":
         favorite_authors=["J.R.R. Tolkien", "Isaac Asimov", "Harper Lee"],
         discovery_preference=DiscoveryPreference.RECOMMENDATIONS,
         discovery_score=0.7,
+        reading_style="balanced",
+        preferred_language="en",
         metadata={"source": "onboarding", "version": "1.0"}
     )
     
@@ -898,6 +919,7 @@ if __name__ == "__main__":
     print(f"  Display Name: {profile.display_name}")
     print(f"  Personality: {profile.reading_personality_display}")
     print(f"  Speed: {profile.reading_speed_display}")
+    print(f"  Style: {profile.reading_style}")
     print(f"  Books/Year: {profile.books_per_year}")
     print(f"  Favorite Genres: {profile.get_favorite_genres()}")
     

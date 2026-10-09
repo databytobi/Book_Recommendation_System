@@ -29,6 +29,14 @@ try:
     from app.core.database import Base
     from app.core.config import settings
 
+    # CRITICAL: importing Base alone registers NO tables. Every model module
+    # must be imported so its Table object attaches to Base.metadata before
+    # autogenerate/revision runs. Without this, `alembic revision
+    # --autogenerate` emitted an EMPTY migration (upgrade(): pass) even though
+    # the application declared 11 models, and `upgrade head` then created no
+    # tables at all.
+    import app.models  # noqa: F401
+
     print("Successfully imported app modules!")
 except ImportError as e:
     print(f"Import error: {e}")

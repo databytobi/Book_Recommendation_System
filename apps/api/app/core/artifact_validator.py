@@ -7,8 +7,6 @@ Provides detailed error messages and guidance for missing files.
 Phase: Core Validation
 """
 
-from _pytest import doctest
-
 import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
@@ -36,26 +34,50 @@ class ArtifactInfo:
     error: Optional[str] = None
     required: bool = True
 
+
 @dataclass
 class ValidationResult:
     """Result of artifact validation."""
     all_present: bool = False
-    missing_files: List[str] = field(default_factory=list)
-    artifacts: Dict[str, Any] = field(default_factory=dict)
+    present: List[ArtifactInfo] = field(default_factory=list)
+    missing: List[ArtifactInfo] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
-    
+
     @classmethod
-    def create(cls, missing_files=None, artifacts=None, errors=None, warnings=None):
-        """Factory method to create ValidationResult with calculated all_present."""
+    def create(
+        cls,
+        missing_files=None,
+        artifacts=None,
+        errors=None,
+        warnings=None
+    ):
+        """Factory method to create ValidationResult."""
+        
         missing_files = missing_files or []
+        artifacts = artifacts or {}
+
         return cls(
             all_present=len(missing_files) == 0,
-            missing_files=missing_files,
-            artifacts=artifacts or {},
+            missing=[
+                artifact
+                for artifact in artifacts.values()
+                if not artifact.exists and artifact.required
+            ],
+            present=[
+                artifact
+                for artifact in artifacts.values()
+                if artifact.exists
+            ],
             errors=errors or [],
             warnings=warnings or []
         )
+
+    @property
+    def missing_files(self) -> List[str]:
+        """Return names of missing required artifacts."""
+        return [artifact.name for artifact in self.missing]
+
 
 # ============================================================
 # ARTIFACT VALIDATOR
@@ -368,6 +390,7 @@ class ArtifactValidator:
 # ============================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================
+
 def validate_artifacts(raise_on_missing: bool = False) -> ValidationResult:
     """
     Validate all required artifacts.
@@ -420,7 +443,7 @@ def ensure_artifacts() -> None:
 from fastapi import HTTPException, status
 
 async def require_artifacts():
-     """
+    """
     FastAPI dependency to ensure artifacts are present.
     
     Usage:

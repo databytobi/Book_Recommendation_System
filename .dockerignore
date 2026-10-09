@@ -1,0 +1,83 @@
+# ============================================================
+# Build context exclusions (context = repository root)
+#
+# Without this file the Docker daemon receives the ENTIRE repository on
+# every build — roughly 3.5 GB, dominated by the virtualenv, the ML
+# artifacts and the .git history. That makes builds slow and can exhaust
+# the daemon's context size limits.
+#
+# NOTE: apps/api/ml/artifacts is intentionally NOT excluded. The production
+# Dockerfile copies apps/api into the image and the API loads the FAISS
+# index and ALS model from /app/ml/artifacts, which the ml_artifacts volume
+# later overlays in production. Excluding it would produce an image that
+# cannot serve recommendations without a separate training run.
+# ============================================================
+
+# ------------------------------------------------------------
+# Version control
+# ------------------------------------------------------------
+.git
+.gitignore
+.gitattributes
+
+# ------------------------------------------------------------
+# Python virtual environments
+# ------------------------------------------------------------
+venv
+.venv
+env
+ENV
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+coverage.xml
+
+# ------------------------------------------------------------
+# Node / Next.js
+# ------------------------------------------------------------
+**/node_modules
+**/.next
+**/out
+**/.turbo
+**/*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------------------------------------
+# Secrets — never bake credentials into an image
+# ------------------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------
+# Raw/interim datasets.
+# The pipeline reads these from a bind mount or volume at run time, not
+# from the image. (apps/api/ml/artifacts is deliberately kept — see above.)
+# ------------------------------------------------------------
+data/raw
+data/interim
+logs
+reports
+
+# ------------------------------------------------------------
+# Editors / OS
+# ------------------------------------------------------------
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------------------------
+# Documentation and CI metadata (not needed to build or run)
+# ------------------------------------------------------------
+docs
+.github
+*.md
+!README.md

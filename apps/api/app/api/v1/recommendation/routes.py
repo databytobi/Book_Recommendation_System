@@ -41,6 +41,8 @@ from app.api.v1.recommendation.dependencies import (
     reload_hybrid_recommender
 )
 
+from app.core.images import normalize_cover_url
+
 # ============================================================
 # MONITORING IMPORTS - ADD THESE
 # ============================================================
@@ -640,6 +642,13 @@ async def get_trending(
                     publisher=publisher if publisher else None,
                     publication_year=publication_year,
                     category=category_val if category_val else None,
+                    # Prefer the large cover, then medium. normalize_cover_url
+                    # rewrites the dead legacy Amazon host to the working one.
+                    image_url=normalize_cover_url(
+                        safe_str(row.get('image_url_l'))
+                        or safe_str(row.get('image_url_m'))
+                        or safe_str(row.get('image_url_s'))
+                    ),
                     score=float(score)
                 )
             )

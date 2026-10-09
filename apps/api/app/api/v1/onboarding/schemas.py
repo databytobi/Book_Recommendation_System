@@ -8,6 +8,7 @@ Phase: Schemas / Onboarding
 """
 
 from typing import List, Optional, Dict, Any
+import re
 from enum import Enum
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -37,6 +38,13 @@ class ReadingGoal(str, Enum):
             cls.INTENSE: 40,
         }
         return goal_map.get(goal, 12)
+
+class ReadingStyle(str, Enum):
+    """Available reading style options."""
+    QUICK = "quick"
+    BALANCED = "balanced"
+    DEEP = "deep"
+    EXPLORER = "explorer"
 
 
 class Language(str, Enum):
@@ -97,6 +105,7 @@ class OnboardingRequest(BaseModel):
                 "favorite_authors": ["Jane Austen", "J.K. Rowling"],
                 "favorite_books": ["9780439139601", "9780141439518"],
                 "reading_goal": "moderate",
+                "reading_style": "balanced",
                 "preferred_genres": ["fiction", "fantasy", "romance"],
                 "preferred_language": "en",
                 "recommendation_count": 20,
@@ -131,6 +140,11 @@ class OnboardingRequest(BaseModel):
     reading_goal: Optional[ReadingGoal] = Field(
         default=ReadingGoal.MODERATE,
         description="Reading goal for the year"
+    )
+
+    reading_style: Optional[ReadingStyle] = Field(
+        default=ReadingStyle.BALANCED,
+        description="Preferred reading style"
     )
     
     preferred_language: Optional[Language] = Field(
@@ -177,30 +191,55 @@ class OnboardingRequest(BaseModel):
         
         return cleaned
     
-    @field_validator('favorite_books')
+    @field_validator("favorite_books")
     @classmethod
     def validate_favorite_books(cls, v: List[str]) -> List[str]:
-        """Validate book ISBNs."""
+        """Validate and clean ISBN-10 and ISBN-13 values."""
         if v is None:
             return []
-        
-        # Clean ISBNs
+
         cleaned = []
+
         for isbn in v:
             # Remove hyphens and spaces
-            cleaned_isbn = isbn.replace('-', '').replace(' ', '').strip()
+            cleaned_isbn = (
+                isbn.replace("-", "")
+                .replace(" ", "")
+                .strip()
+                .upper()
+            )
+
             if not cleaned_isbn:
                 continue
-            
-            # Validate ISBN format (10 or 13 digits)
-            if not (len(cleaned_isbn) in [10, 13] and cleaned_isbn.isdigit()):
-                raise ValueError(f"Invalid ISBN format: {isbn}")
-            
+
+            # ISBN-10:
+            # 9 digits followed by a digit or X
+            if len(cleaned_isbn) == 10:
+                if not re.fullmatch(r"\d{9}[\dX]", cleaned_isbn):
+                    raise ValueError(
+                        f"Invalid ISBN-10 format: {isbn}"
+                    )
+
+            # ISBN-13:
+            # Exactly 13 digits
+            elif len(cleaned_isbn) == 13:
+                if not cleaned_isbn.isdigit():
+                    raise ValueError(
+                        f"Invalid ISBN-13 format: {isbn}"
+                    )
+
+            else:
+                raise ValueError(
+                    f"Invalid ISBN format: {isbn}"
+                )
+
             cleaned.append(cleaned_isbn)
-        
+
         if len(cleaned) > 50:
-            raise ValueError("Cannot select more than 50 books")
-        
+            raise ValueError(
+                "Cannot select more than 50 books"
+            )
+
         return cleaned
     
     @field_validator('preferred_genres')
@@ -294,6 +333,7 @@ class OnboardingResponse(BaseModel):
                     "total_books": 2,
                     "reading_goal": "moderate",
                     "reading_goal_books": 12,
+                    "reading_style": "balanced",
                     "language": "English"
                 }
             }
@@ -481,6 +521,7 @@ class OnboardingPreferenceSummary(BaseModel):
     total_books: int = Field(..., description="Number of selected books")
     reading_goal: str = Field(..., description="Reading goal")
     reading_goal_books: int = Field(..., description="Estimated books per year")
+    reading_style: str = Field(..., description="Preferred reading style")
     language: str = Field(..., description="Preferred language")
     theme: str = Field(..., description="UI theme")
     top_genres: List[str] = Field(default_factory=list, description="Top 3 genres")
@@ -494,6 +535,7 @@ class OnboardingPreferenceSummary(BaseModel):
         authors: List[str],
         books: List[str],
         reading_goal: str,
+        reading_style: str,
         language: str,
         theme: str,
     ) -> "OnboardingPreferenceSummary":
@@ -510,6 +552,8 @@ class OnboardingPreferenceSummary(BaseModel):
             Selected books
         reading_goal : str
             Reading goal
+        reading_style : str
+            Preferred reading style
         language : str
             Preferred language
         theme : str
@@ -525,6 +569,7 @@ class OnboardingPreferenceSummary(BaseModel):
             total_books=len(books),
             reading_goal=reading_goal,
             reading_goal_books=ReadingGoal.get_book_count(reading_goal),
+            reading_style=reading_style,
             language=Language.get_language_name(language),
             theme=theme,
             top_genres=genres[:3],

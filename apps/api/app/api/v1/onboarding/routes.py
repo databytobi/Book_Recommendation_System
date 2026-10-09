@@ -23,7 +23,7 @@ from app.api.v1.onboarding.schemas import (
 )
 # pyrefly: ignore [missing-import]
 from app.api.v1.onboarding.service import OnboardingService
-# pyrefly: get_current_userignore [missing-import]
+# pyrefly: ignore [missing-import]
 from app.dependencies.auth import get_current_user
 from app.models.user import User
 
@@ -86,6 +86,11 @@ def complete_onboarding(
             request=request
         )
         
+        # FIX: Added log for onboarding_completed
+        logger.info(
+            f"onboarding_completed saved = {result.get('onboarding_completed', False)}"
+        )
+        
         logger.info(f"Onboarding completed for user: {current_user.id}")
         
         # Generate preference summary
@@ -93,9 +98,26 @@ def complete_onboarding(
             genres=request.preferred_genres,
             authors=request.favorite_authors,
             books=request.favorite_books,
-            reading_goal=request.reading_goal.value if request.reading_goal else "moderate",
-            language=request.preferred_language.value if request.preferred_language else "en",
-            theme=request.theme.value if request.theme else "dark"
+            reading_goal=(
+                request.reading_goal.value
+                if hasattr(request.reading_goal, "value")
+                else request.reading_goal or "moderate"
+            ),
+            reading_style=(
+                request.reading_style.value
+                if hasattr(request.reading_style, "value")
+                else request.reading_style or "balanced"
+            ),
+            language=(
+                request.preferred_language.value
+                if hasattr(request.preferred_language, "value")
+                else request.preferred_language or "en"
+            ),
+            theme=(
+                request.theme.value
+                if hasattr(request.theme, "value")
+                else request.theme or "dark"
+            ),
         )
         
         return OnboardingResponse.success_response(
@@ -209,9 +231,21 @@ def get_onboarding_status(
     try:
         service = OnboardingService(db)
         
-        status = service.get_status(current_user.id)
+        # NOTE: this variable must NOT be named `status`, because that would
+        # shadow the `fastapi.status` module imported at the top of this file.
+        # Doing so made the `except` block below raise
+        # AttributeError: 'NoneType' object has no attribute
+        # 'HTTP_500_INTERNAL_SERVER_ERROR', which replaced the real error and
+        # left the frontend unable to read onboarding state.
+        onboarding_state = service.get_status(current_user.id)
         
-        if not status:
+        # FIX: Added log for onboarding status
+        logger.info(
+            f"Onboarding status → completed={onboarding_state.get('completed_steps', []) if onboarding_state else []} "
+            f"current={onboarding_state.get('current_step', 'welcome') if onboarding_state else 'welcome'}"
+        )
+        
+        if not onboarding_state:
             # User hasn't started onboarding
             return OnboardingProgressResponse(
                 user_id=current_user.id,
@@ -225,13 +259,13 @@ def get_onboarding_status(
         
         return OnboardingProgressResponse.from_onboarding_state(
             user_id=current_user.id,
-            current_step=status.get("current_step", "welcome"),
-            completed_steps=status.get("completed_steps", []),
-            total_steps=status.get("total_steps", 5)
+            current_step=onboarding_state.get("current_step", "welcome"),
+            completed_steps=onboarding_state.get("completed_steps", []),
+            total_steps=onboarding_state.get("total_steps", 5)
         )
         
     except Exception as e:
-        logger.error(f"Failed to get onboarding status: {e}")
+        logger.error(f"Failed to get onboarding status: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get onboarding status"
@@ -327,14 +361,19 @@ def complete_onboarding_step(
             data=request.data
         )
         
-        # Get updated status
-        status = service.get_status(current_user.id)
+        # Get updated status.
+        # Named `onboarding_state`, not `status`: a local `status` would shadow
+        # the fastapi.status module used by the handlers below.
+        onboarding_state = service.get_status(current_user.id)
+        
+        if not onboarding_state:
+            onboarding_state = {}
         
         return OnboardingProgressResponse.from_onboarding_state(
             user_id=current_user.id,
-            current_step=status.get("current_step", "welcome"),
-            completed_steps=status.get("completed_steps", []),
-            total_steps=status.get("total_steps", 5)
+            current_step=onboarding_state.get("current_step", "welcome"),
+            completed_steps=onboarding_state.get("completed_steps", []),
+            total_steps=onboarding_state.get("total_steps", 5)
         )
         
     except ValueError as e:
@@ -343,7 +382,7 @@ def complete_onboarding_step(
             detail=str(e)
         )
     except Exception as e:
-        logger.error(f"Failed to complete step: {e}")
+        logger.error(f"Failed to complete step: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to complete step"
@@ -352,64 +391,50 @@ def complete_onboarding_step(
 
 @router.get(
     "/preferences",
-    response_model=OnboardingPreferenceSummary,
+    response_model=OnboardingRequest,
     summary="Get onboarding preferences",
-    description="Get the current onboarding preferences summary."
+    description="Get the user's editable onboarding preferences."
 )
 def get_onboarding_preferences(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> OnboardingPreferenceSummary:
+) -> OnboardingRequest:
     """
-    Get a summary of the user's onboarding preferences.
-    
-    Parameters:
-    -----------
-    db : Session
-        Database session
-    current_user : User
-        Authenticated user
-    
-    Returns:
-    --------
-    OnboardingPreferenceSummary: Preference summary
+    Get the user's editable onboarding preferences.
     """
     try:
         service = OnboardingService(db)
-        
+
         preferences = service.get_preferences(current_user.id)
-        
+
         if not preferences:
-            return OnboardingPreferenceSummary(
-                total_genres=0,
-                total_authors=0,
-                total_books=0,
+            return OnboardingRequest(
+                preferred_genres=[],
+                favorite_authors=[],
+                favorite_books=[],
                 reading_goal="moderate",
-                reading_goal_books=12,
-                language="English",
+                reading_style="balanced",
+                preferred_language="en",
                 theme="dark",
-                top_genres=[],
-                top_authors=[],
-                top_books=[]
             )
-        
-        return OnboardingPreferenceSummary.from_preferences(
-            genres=preferences.get("preferred_genres", []),
-            authors=preferences.get("favorite_authors", []),
-            books=preferences.get("favorite_books", []),
+
+        return OnboardingRequest(
+            preferred_genres=preferences.get("preferred_genres", []),
+            favorite_authors=preferences.get("favorite_authors", []),
+            favorite_books=preferences.get("favorite_books", []),
             reading_goal=preferences.get("reading_goal", "moderate"),
-            language=preferences.get("preferred_language", "en"),
-            theme=preferences.get("theme", "dark")
+            reading_style=preferences.get("reading_style", "balanced"),
+            preferred_language=preferences.get("preferred_language", "en"),
+            theme=preferences.get("theme", "dark"),
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to get preferences: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get preferences"
+            detail="Failed to get preferences",
         )
-
-
+        
 @router.post(
     "/reset",
     response_model=Dict[str, Any],

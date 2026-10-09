@@ -7,7 +7,6 @@ metadata like notes, tags, and collection management.
 Phase: Database Models
 """
 
-from ctypes import Union
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import json
@@ -117,10 +116,10 @@ class UserFavoriteBook(Base):
     )
     
     user_id = Column(
-        String(36),
+        Integer,
         nullable=False,
         index=True,
-        doc="User identifier (UUID)"
+        doc="User identifier"
     )
     
     isbn = Column(

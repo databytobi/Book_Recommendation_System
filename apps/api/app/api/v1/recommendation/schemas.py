@@ -7,10 +7,45 @@ Includes request/response validation, examples, and comprehensive documentation.
 Phase: API Schemas
 """
 
+import math
+
 from pydantic import BaseModel, Field, validator, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
+
+
+def _is_null(value: Any) -> bool:
+    """True for None, NaN, NaT and the strings pandas produces for them."""
+    if value is None:
+        return True
+    if isinstance(value, float):
+        return math.isnan(value)
+    if isinstance(value, str):
+        return value.strip().lower() in ("", "nan", "none", "<na>", "nat")
+    return False
+
+
+def _clean_optional_str(value: Any) -> Optional[str]:
+    """Coerce a possibly-missing value to Optional[str]."""
+    return None if _is_null(value) else str(value)
+
+
+def _clean_optional_int(value: Any) -> Optional[int]:
+    """
+    Coerce a possibly-missing value to Optional[int].
+
+    Pandas yields NaN for absent numeric columns. Passing NaN straight into a
+    Pydantic `Optional[int]` raises "Input should be a finite number", which
+    surfaced as a 500 for user IDs with no interaction history. Invalid values
+    degrade to None instead of failing the whole response.
+    """
+    if _is_null(value):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 # ============================================================
@@ -368,6 +403,9 @@ class BookRecommendation(BaseModel):
     publisher: Optional[str] = Field(None, description="Publisher name")
     publication_year: Optional[int] = Field(None, description="Year of publication")
     category: Optional[str] = Field(None, description="Book category")
+    # Cover art. Normalized to a loadable https URL by app/core/images.py,
+    # because the catalog's original Amazon host now returns HTTP 403.
+    image_url: Optional[str] = Field(None, description="Cover image URL")
     score: float = Field(..., description="Recommendation score")
     score_breakdown: Optional[Dict[str, float]] = Field(
         None,
@@ -571,13 +609,14 @@ def create_recommendation_response(
                 isbn=rec.get("isbn", ""),
                 title=rec.get("title", "Unknown"),
                 author=rec.get("author") or rec.get("authors"),
-                publisher=rec.get("publisher"),
-                publication_year=rec.get("publication_year"),
-                category=rec.get("category"),
+                publisher=_clean_optional_str(rec.get("publisher")),
+                publication_year=_clean_optional_int(rec.get("publication_year")),
+                category=_clean_optional_str(rec.get("category")),
                 score=rec.get("score", 0.0) or rec.get("hybrid_score", 0.0) or rec.get("similarity", 0.0),
                 score_breakdown={
                     k: v for k, v in rec.items()
                     if k.endswith("_score") and isinstance(v, (int, float))
+                    and not (isinstance(v, float) and math.isnan(v))
                 }
             )
         )

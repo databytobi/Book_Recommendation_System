@@ -43,12 +43,8 @@ health_router = APIRouter(
 
 # ... rest of the file remains the same ...
 
-import time
 import logging
-from typing import Dict, Any
-from fastapi import APIRouter, Request, Depends, status
-from fastapi.responses import JSONResponse
-from datetime import datetime
+from fastapi import APIRouter
 
 # Import service registry for ML service health
 import sys
@@ -58,7 +54,6 @@ from pathlib import Path
 api_dir = Path(__file__).resolve().parents[4]  # Go up to apps/api
 sys.path.insert(0, str(api_dir))
 
-from ml.service_registry import get_service_registry
 
 logger = logging.getLogger(__name__)
 

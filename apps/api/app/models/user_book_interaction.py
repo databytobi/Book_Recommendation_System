@@ -7,7 +7,6 @@ views, clicks, ratings, reviews, saves, shares, and reading status.
 Phase: Database Models
 """
 
-from ctypes import Union
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import json

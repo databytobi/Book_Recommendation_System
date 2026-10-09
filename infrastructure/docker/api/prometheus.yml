@@ -1,5 +1,9 @@
 # Prometheus Configuration
-# Path: infrastructure/docker/prometheus.yml
+# Actual path: infrastructure/docker/api/prometheus.yml
+# (The previous header claimed infrastructure/docker/prometheus.yml.)
+#
+# This is the development/standalone variant. The production Compose stack uses
+# infrastructure/compose/prometheus.prod.yml.
 
 global:
   scrape_interval: 15s      # How often to scrape targets
@@ -42,24 +46,7 @@ scrape_configs:
           service: 'prometheus'
           environment: 'docker'
 
-  # Optional: Scrape Redis metrics
-  - job_name: 'redis'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    static_configs:
-      - targets:
-          - 'redis:6379'
-        labels:
-          service: 'redis'
-          environment: 'docker'
-
-  # Optional: Scrape PostgreSQL metrics
-  - job_name: 'postgres'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    static_configs:
-      - targets:
-          - 'postgres:5432'
-        labels:
-          service: 'postgres'
-          environment: 'docker'
+  # NOTE: Redis and PostgreSQL are NOT scraped. Neither exposes a Prometheus
+  # endpoint on its native port, so jobs targeting redis:6379 / postgres:5432
+  # would sit permanently down and fire constant false alerts. Use
+  # redis_exporter / postgres_exporter if you need those metrics.

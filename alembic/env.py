@@ -28,14 +28,11 @@ print(f"App path added to sys.path: {app_path.parent}")
 print(f"Does app exist? {(app_path).exists()}")
 
 try:
-    # Now you can import from app
-    # pyrefly: ignore [missing-import]
     from app.core.database import Base
-
-    # pyrefly: ignore [missing-import]
     from app.core.config import settings
+    import app.models
 
-    print("Successfully imported app modules!")
+    print("Successfully imported app modules and database models!")
 except ImportError as e:
     print(f"Import error: {e}")
     print(f"Contents of {app_path.parent}: {list(app_path.parent.iterdir())}")

@@ -1,0 +1,47 @@
+# Prometheus configuration for the production Compose stack.
+# Referenced by infrastructure/compose/docker-compose.prod.yml as
+# ./prometheus.prod.yml. This file previously did not exist, so the prometheus
+# container would fail to start with a missing-config error.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+rule_files:
+  # - "alerts.yml"
+
+scrape_configs:
+  # The FastAPI application exposes Prometheus metrics at /metrics.
+  - job_name: 'recommendation-api'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+          - 'api:8000'
+        labels:
+          service: 'book-recommendation-api'
+          environment: 'production'
+
+  - job_name: 'prometheus'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+        labels:
+          service: 'prometheus'
+          environment: 'production'
+
+  # NOTE: Redis and PostgreSQL are NOT scraped here. Neither exposes a
+  # Prometheus metrics endpoint on its native port (6379 / 5432), so scrape
+  # jobs targeting them would report permanently-down targets and generate
+  # constant false alerts. To monitor them, deploy redis_exporter and
+  # postgres_exporter as additional services and point jobs at those instead.

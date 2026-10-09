@@ -6,6 +6,7 @@ Database models for the Book Recommendation System.
 
 from app.models.user import User
 from app.models.author import Author
+from app.models.book import Book
 from app.models.recommendation_click import RecommendationClick
 from app.models.recommendation_event import RecommendationEvent
 from app.models.search_history import SearchHistory
@@ -44,6 +45,7 @@ from app.models.user_profile import (
 __all__ = [
     "User",
     "Author",
+    "Book",
     "RecommendationClick",
     "RecommendationEvent",
     "SearchHistory",

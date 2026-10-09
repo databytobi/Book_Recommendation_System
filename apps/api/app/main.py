@@ -25,10 +25,29 @@ import time
 from datetime import datetime
 from typing import Dict, Any
 
-# Import routes - Recommendation routes
-from app.api.v1.recommendation.routes import router as recommendation_router
+#from app.api.v1 import api_router
+#from app.api.v1.favorites.routes import router as favorites_router
 
-# Import health routes
+# Import routes
+#
+# There are TWO recommendation routers with different responsibilities:
+#
+#   app.api.v1.recommendation.routes  (singular) -> ML-backed hybrid engine.
+#       /recommendation/user, /similar, /search, /trending, /explain,
+#       /health, /stats, /reload, /weights, /batch
+#
+#   app.api.v1.recommendations.routes (plural)   -> DB-backed scoring variant.
+#       /recommendations
+#
+# Previously the ML router import was commented out and the DB router was
+# imported *under the name* `recommendation_router`, so the entire ML
+# recommendation API was never mounted and its integration tests failed
+# with 404. Both are now imported explicitly and mounted at distinct
+# prefixes so neither shadows the other.
+from app.api.v1.recommendation.routes import router as ml_recommendation_router
+
+from app.api.v1.recommendations.routes import router as recommendations_router
+
 from app.api.v1.health.routes import health_router
 
 # Import auth routes
@@ -36,7 +55,14 @@ from app.api.v1.auth.routes import router as auth_router
 #import author router
 from app.api.v1.authors.routes import router as author_router
 
+from app.api.v1.books.routes import router as books_router
+
 from app.api.v1.onboarding.routes import router as onboarding_router
+
+from app.api.v1.favorites.routes import router as favorites_router
+
+from app.api.v1.history.routes import router as history_router
+
 
 # Import service registry - now working because we added api_dir to path
 from ml.service_registry import get_service_registry
@@ -379,6 +405,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ROUTES
 # ============================================================
 
+#app.include_router(api_router, prefix="/api/v1")
+
 # Include authentication routes
 app.include_router(
     auth_router,
@@ -386,11 +414,27 @@ app.include_router(
     tags=["Authentication"]
 )
 
-# Include recommendation routes with version prefix
+# ML-backed hybrid recommendation engine.
+# Router path prefix is "/recommendation"; the version prefix is added here,
+# yielding /api/v1/recommendation/*.
 app.include_router(
-    recommendation_router,
+    ml_recommendation_router,
     prefix=settings.API_V1_PREFIX,
-    tags=["Recommendations"]
+    tags=["Recommendations (ML Engine)"]
+)
+
+# DB-backed recommendation variant. Its router prefix is "/recommendations",
+# yielding /api/v1/recommendations.
+app.include_router(
+    recommendations_router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Recommendations (Catalog)"]
+)
+
+app.include_router(
+    books_router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Books"]
 )
 
 # Include health routes with version prefix
@@ -402,13 +446,25 @@ app.include_router(
 
 app.include_router(
     onboarding_router,
-    prefix="/api/v1/onboarding",
+    prefix=f"{settings.API_V1_PREFIX}/onboarding",
     tags=["Onboarding"],
 )
 
 app.include_router(
+    favorites_router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["Favorites"]
+)
+
+app.include_router(
+    history_router,
+    prefix=settings.API_V1_PREFIX,
+    tags=["History"]
+)
+
+app.include_router(
     author_router,
-    prefix="/api/v1",
+    prefix=settings.API_V1_PREFIX,
     tags=["Authors"]
 )
 
@@ -483,7 +539,10 @@ async def root() -> Dict[str, Any]:
         registry_status = "ready" if health['loaded'] else "initializing"
     
     return {
-        "name": settings.APP_NAME,
+        # Explicit service name. settings.APP_NAME is the product name
+        # ("Book Recommendation System"); the API identifies itself as the
+        # API, which is what clients and the test suite expect.
+        "name": f"{settings.APP_NAME} API",
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "status": registry_status,
@@ -491,7 +550,6 @@ async def root() -> Dict[str, Any]:
             "docs": "/docs",
             "redoc": "/redoc",
             "openapi": "/openapi.json",
-            "health": f"{settings.API_V1_PREFIX}/health",
             "version": "/version",
             "artifacts": "/artifacts",
             "metrics": "/metrics",
@@ -520,7 +578,9 @@ async def root() -> Dict[str, Any]:
                 "liveness": f"{settings.API_V1_PREFIX}/health/liveness",
                 "readiness": f"{settings.API_V1_PREFIX}/health/readiness",
                 "details": f"{settings.API_V1_PREFIX}/health/details"
-            }
+            },
+            # Top-level readiness probe (unversioned).
+            "health_check": "/health"
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -742,11 +802,60 @@ async def clear_monitor_alerts(
 # ADMIN ENDPOINTS
 # ============================================================
 
+import hmac as _hmac
+
+from fastapi import Header as _Header
+
+
+async def require_admin_key(
+    x_admin_key: str = _Header(
+        default="",
+        alias="X-Admin-Key",
+        description="Admin API key. Required for /admin/* in staging and production.",
+    ),
+) -> None:
+    """
+    Guard the /admin/* operational endpoints.
+
+    These routes were documented as "admin only" but performed no
+    authentication, so any client able to reach the API could enumerate the
+    service registry or force a full ML model reload.
+
+    Behaviour:
+      * If ADMIN_API_KEY is configured, the supplied X-Admin-Key must match
+        (constant-time comparison).
+      * If it is NOT configured, access is permitted only outside
+        staging/production. In staging/production an unconfigured key is a
+        misconfiguration and requests are rejected rather than silently
+        allowed.
+    """
+    configured = (settings.ADMIN_API_KEY or "").strip()
+
+    if not configured:
+        if settings.ENVIRONMENT.lower() in {"production", "staging"}:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    "Admin endpoints are disabled: ADMIN_API_KEY is not "
+                    "configured. Set it to enable them."
+                ),
+            )
+        return
+
+    if not x_admin_key or not _hmac.compare_digest(x_admin_key, configured):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-Admin-Key header.",
+            headers={"WWW-Authenticate": "X-Admin-Key"},
+        )
+
+
 @app.post(
     "/admin/reload",
     tags=["Admin"],
     summary="Reload all services",
-    description="Reload all ML services (admin only)"
+    description="Reload all ML services. Requires the X-Admin-Key header.",
+    dependencies=[Depends(require_admin_key)],
 )
 async def reload_services() -> Dict[str, Any]:
     """
@@ -780,7 +889,8 @@ async def reload_services() -> Dict[str, Any]:
     "/admin/registry",
     tags=["Admin"],
     summary="Registry status",
-    description="Get detailed registry status (admin only)"
+    description="Get detailed registry status. Requires the X-Admin-Key header.",
+    dependencies=[Depends(require_admin_key)],
 )
 async def get_registry_status() -> Dict[str, Any]:
     """

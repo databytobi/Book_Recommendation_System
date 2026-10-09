@@ -9,62 +9,86 @@ on:
       - "apps/api/**"
       - "requirements.txt"
       - "Dockerfile"
+      - "infrastructure/docker/api/**"
+      - ".github/workflows/api.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "apps/api/**"
+      - "requirements.txt"
+      - "Dockerfile"
+      - "infrastructure/docker/api/**"
 
 jobs:
   tests:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: root
+          POSTGRES_USER: postgres
+          POSTGRES_DB: book_recommendation_test
+        ports:
+          - 5432:5432
+        # GitHub waits for this before running any step.
+        options: >-
+          --health-cmd "pg_isready -U postgres -d book_recommendation_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       DATABASE_URL: postgresql://postgres:root@localhost:5432/book_recommendation_test
+      ENVIRONMENT: testing
+      DEBUG: "True"
+      SECRET_KEY: ci-only-test-secret-key-not-used-anywhere-else-0123456789
+      JWT_SECRET: ci-only-test-jwt-secret-not-used-anywhere-else-0123456789
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: "3.11"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest-cov
 
-      - name: Start Postgres for testing
-        run: |
-          docker run --name test-postgres \
-            -e POSTGRES_PASSWORD=root \
-            -e POSTGRES_USER=postgres \
-            -e POSTGRES_DB=book_recommendation_test \
-            -p 5432:5432 \
-            -d postgres:16-alpine
-
-      - name: Wait for Postgres to be ready
-        run: |
-          for i in {1..10}; do
-            if docker exec test-postgres pg_isready -U postgres -d book_recommendation_test 2>/dev/null; then
-              echo "Postgres is ready" && break
-            fi
-            echo "Waiting for Postgres..." && sleep 3
-          done
-
+      # The suite lives at apps/api/tests. The previous path (tests/api/)
+      # did not exist, so this step collected nothing.
       - name: Run tests
         run: |
-          python -m pytest tests/api/ --cov=apps/api --cov-report=term-missing
+          python -m pytest --cov=apps/api --cov-report=term-missing --cov-report=xml
 
-      - name: Stop Postgres
-        run: |
-          docker stop test-postgres
-          docker rm test-postgres
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: ignore
 
   build-image:
     needs: tests
+    # Only build on pushes to the main branches, not on every pull request.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up QEMU for multi-platform builds
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -78,21 +102,31 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
-          context: ../..
+          # The build context MUST be the repository root: the Dockerfile
+          # copies requirements.txt and apps/api from it. The previous
+          # value "../.." escaped the repository entirely.
+          context: .
           file: infrastructure/docker/api/Dockerfile
           push: true
-          tags:
+          tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/book-recommendation-api:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/book-recommendation-api:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Deployment is intentionally a no-op placeholder. The production target is
+  # Docker Compose on a single VPS, which is driven by
+  # infrastructure/compose/docker-compose.prod.yml — see docs/DEPLOYMENT_GUIDE.md.
+  # Wire real credentials in as repository secrets before enabling this job.
   deploy:
     needs: build-image
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy to production
+      - name: Deployment notice
         run: |
-          echo "Deploying version ${{ github.sha }}"
-          echo "Triggering production deployment..."
+          echo "Image pushed for commit ${{ github.sha }}."
+          echo "Deploy with:"
+          echo "  docker compose -f infrastructure/compose/docker-compose.prod.yml pull"
+          echo "  docker compose -f infrastructure/compose/docker-compose.prod.yml up -d"

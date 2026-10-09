@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import normalize
 
 
-BASE_DIR = Path(__file__).resolve().parents[4]
+BASE_DIR = Path(__file__).resolve().parents[1]
 
 ARTIFACT_DIR = (
     BASE_DIR

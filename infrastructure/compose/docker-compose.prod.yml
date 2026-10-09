@@ -1,0 +1,229 @@
+# ============================================================
+# PRODUCTION STACK — single-VPS deployment
+#
+#   docker compose -f infrastructure/compose/docker-compose.prod.yml up -d --build
+#
+# Requires a .env file at the repository root (copy from .env.example).
+# Only nginx publishes ports; api/postgres/redis stay on the internal network.
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # REVERSE PROXY — the only service exposed to the internet
+  # ----------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: book_nginx
+    ports:
+      - "80:80"
+      # Uncomment once TLS certificates are mounted:
+      # - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - book_network
+
+  # ----------------------------------------------------------
+  # FRONTEND
+  # ----------------------------------------------------------
+  frontend:
+    build:
+      context: ../../apps/frontend/web
+      # Resolved RELATIVE TO THE CONTEXT above, which is apps/frontend/web.
+      # Reaching the repository root therefore needs three levels up, not two.
+      # With "../../" this pointed at apps/infrastructure/docker/frontend/
+      # Dockerfile, which does not exist, and the image build failed.
+      dockerfile: ../../../infrastructure/docker/frontend/Dockerfile
+      args:
+        # Baked into the client bundle at build time.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost/api/v1}
+    container_name: book_frontend
+    environment:
+      NODE_ENV: production
+    expose:
+      - "3000"
+    restart: unless-stopped
+    networks:
+      - book_network
+
+  # ----------------------------------------------------------
+  # API
+  # ----------------------------------------------------------
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/api/Dockerfile
+    container_name: book_api
+    env_file:
+      - ../../.env
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "False"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-book_recommendation_db}
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      # Model/index artifacts — populated by the ml-train job, read by the API.
+      - ml_artifacts:/app/ml/artifacts
+      - ml_models:/app/ml/models
+      - logs:/app/logs
+    expose:
+      - "8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - book_network
+
+  # ----------------------------------------------------------
+  # POSTGRES
+  # ----------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: book_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-book_recommendation_db}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-book_recommendation_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - book_network
+    shm_size: 256mb
+
+  # ----------------------------------------------------------
+  # REDIS
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: book_redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - book_network
+
+  # ----------------------------------------------------------
+  # MODEL TRAINING / ARTIFACT GENERATION (on-demand)
+  #
+  #   docker compose -f infrastructure/compose/docker-compose.prod.yml \
+  #     run --rm ml-train python ml/features/embedding_pipeline.py
+  # ----------------------------------------------------------
+  ml-train:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/api/Dockerfile
+    container_name: book_ml_train
+    env_file:
+      - ../../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-book_recommendation_db}
+    volumes:
+      - ../../apps/api:/app
+      - ../../data:/data
+      - ml_artifacts:/app/ml/artifacts
+      - ml_models:/app/ml/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - book_network
+    profiles:
+      - tools
+    command: python -c "print('ml-train ready. Run a pipeline script explicitly.')"
+
+  # ----------------------------------------------------------
+  # MONITORING (optional)
+  # ----------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: book_prometheus
+    volumes:
+      - ./prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    expose:
+      - "9090"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - book_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: book_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD is required}
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost/grafana}
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../docker/api/grafana/provisioning:/etc/grafana/provisioning:ro
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - book_network
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  postgres_data:
+    name: book_postgres_data
+  redis_data:
+    name: book_redis_data
+  ml_artifacts:
+    name: book_ml_artifacts
+  ml_models:
+    name: book_ml_models
+  logs:
+    name: book_logs
+  prometheus_data:
+    name: book_prometheus_data
+  grafana_data:
+    name: book_grafana_data
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  book_network:
+    name: book_network
+    driver: bridge

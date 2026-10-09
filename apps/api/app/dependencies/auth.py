@@ -7,28 +7,35 @@ Dependency injection for authentication.
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 
 from app.models.user import User
+from app.core.database import get_db
+from app.services.auth_service import AuthService
 
 security = HTTPBearer()
 
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> Optional[User]:
+    db: Session = Depends(get_db),
+) -> User:
     """
-    Get the current authenticated user.
-    This is a placeholder implementation.
+    Return the authenticated user from the JWT token.
     """
-    # This is a placeholder - implement actual authentication logic
     token = credentials.credentials
-    
-    # For testing purposes, return a dummy user
-    return User(
-        id=1,
-        email="test@example.com",
-        username="testuser",
-        is_active=True
-    )
+
+    service = AuthService(db)
+    user = service.get_current_user(token)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    return user
+
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
@@ -39,11 +46,11 @@ async def get_current_active_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
-    
+
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user"
         )
-    
+
     return current_user

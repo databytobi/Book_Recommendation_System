@@ -2,7 +2,7 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
-asyncpg== 0.31.0
+asyncpg==0.31.0
 bcrypt==4.0.1
 black==26.5.1
 certifi==2026.5.20
@@ -76,3 +76,25 @@ email-validator==2.3.0
 
 pytest-cov
 pytest-mock
+
+#frontend requirements.txt
+#npm install -D @types/axios
+#npm install axios
+#npx shadcn-ui@latest add button
+#npx shadcn-ui@latest add avatar
+#npx shadcn-ui@latest add badge
+#npx shadcn-ui@latest add dropdown-menu
+#npx shadcn-ui@latest add sheet
+#npx shadcn-ui@latest add tooltip
+#npx shadcn-ui@latest add command
+#npx shadcn-ui@latest add dialog
+#npx shadcn-ui@latest add scroll-area
+#npx shadcn-ui@latest add skeleton
+#npx shadcn-ui@latest add card
+#npx shadcn-ui@latest add input
+#npx shadcn-ui@latest add label
+#npx shadcn@latest add checkbox
+#npx shadcn@latest add separator
+# Install date-fns for the NotificationMenu
+#npm install date-fns
+#npx shadcn@latest add tooltip badge

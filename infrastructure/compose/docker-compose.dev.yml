@@ -1,6 +1,27 @@
-
-
 services:
+  # ============================================================
+  # FRONTEND SERVICE
+  # ============================================================
+
+  frontend:
+    build:
+      context: ../../apps/frontend/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api/v1
+    container_name: book_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000/api/v1
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - book_network
+
   # ============================================================
   # API SERVICE
   # ============================================================
@@ -13,13 +34,18 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Application code (for development with hot reload)
+      # Application code (for development with hot reload).
+      # This single bind mount already exposes apps/api/ml/artifacts and
+      # apps/api/ml/models to the container, so the ~900 MB of trained
+      # artifacts on the host are used directly — no copy required.
       - ../../apps/api:/app
       - ../../requirements.txt:/requirements.txt
 
-      # Persistent ML artifacts - THIS IS THE KEY ADDITION
-      - ml_artifacts:/app/ml/artifacts
-      - ml_models:/app/ml/models
+      # NOTE: ml_artifacts:/app/ml/artifacts and ml_models:/app/ml/models were
+      # removed. Named volumes start EMPTY and, because Compose applies deeper
+      # mount paths after shallower ones, they masked the artifacts provided by
+      # the /app bind above. The API then found no FAISS index or ALS model and
+      # every recommendation returned HTTP 503.
 
       # Data volumes
       - data_processed:/data/processed
@@ -129,13 +155,16 @@ services:
   ml-train:
     build:
       context: ../..
-      dockerfile: infrastructure/docker/ml/Dockerfile
+      # Previously infrastructure/docker/ml/Dockerfile, which does not exist.
+      # Reuse the API image: it already contains the full ML stack (faiss,
+      # implicit, sentence-transformers) that the pipeline scripts need.
+      dockerfile: infrastructure/docker/api/Dockerfile
     container_name: book_ml_train
     volumes:
       - ../../apps/api:/app
+      - ../../data:/data
       - ml_artifacts:/app/ml/artifacts
       - ml_models:/app/ml/models
-      - data_processed:/data/processed
     env_file:
       - ../../.env.docker
     depends_on:
@@ -160,7 +189,9 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      # Previously ./prometheus.yml, which does not exist in this directory.
+      # The dev/standalone config lives under infrastructure/docker/api/.
+      - ../docker/api/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

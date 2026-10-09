@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1640 1300" width="1640" height="1300"
+     role="img" aria-labelledby="svgTitle svgDesc">
+  <title id="svgTitle">Hybrid Book Recommendation System — System Architecture</title>
+  <desc id="svgDesc">Layered architecture diagram showing the Next.js client tier, the FastAPI application tier,
+  the ML recommendation services, the persistence tier, and the observability and infrastructure tier.</desc>
+
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arBlue" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arGreen" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#059669"/>
+    </marker>
+    <marker id="arAmber" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <style>
+    .h1    { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 26px; font-weight: 700; fill: #0f172a; }
+    .sub   { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 13px; fill: #64748b; }
+    .bl    { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #334155; letter-spacing: 1.1px; }
+    .bt    { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #0f172a; }
+    .bx    { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 10.5px; fill: #475569; }
+    .mn    { font-family: Consolas, "SF Mono", Menlo, monospace; font-size: 10px; fill: #475569; }
+    .lbl   { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 11px; font-weight: 600; fill: #1e293b; }
+    .note  { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 10.5px; font-style: italic; fill: #64748b; }
+    .lg    { font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 10.5px; fill: #475569; }
+  </style>
+
+  <rect width="1640" height="1300" fill="#ffffff"/>
+  <text class="h1" x="820" y="40" text-anchor="middle">Hybrid Book Recommendation System — System Architecture</text>
+  <text class="sub" x="820" y="65" text-anchor="middle">Modular monolith · FastAPI + Next.js · hybrid ML ranking (collaborative + content + popularity)</text>
+
+  <!-- ==================== CLIENT LAYER ==================== -->
+  <rect x="40" y="88" width="1560" height="150" rx="12" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+  <text class="bl" x="56" y="109">CLIENT LAYER</text>
+  <text class="note" x="1584" y="109" text-anchor="end">Next.js 16.2.10 (App Router) · React 19.2.4 · Tailwind v4 · shadcn</text>
+
+  <rect x="64" y="118" width="360" height="100" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text class="bt" x="78" y="140">Auth Pages</text>
+  <text class="bx" x="78" y="160">Route group (auth) — two-panel AuthHero layout</text>
+  <text class="mn" x="78" y="179">/login   /register</text>
+  <text class="mn" x="78" y="194">(protected)/onboarding</text>
+  <text class="bx" x="78" y="210">react-hook-form + zod schemas</text>
+
+  <rect x="444" y="118" width="360" height="100" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text class="bt" x="458" y="140">Auth State</text>
+  <text class="bx" x="458" y="160">AuthProvider — React Context (no Redux/Zustand)</text>
+  <text class="mn" x="458" y="179">features/auth/{provider,context}.tsx</text>
+  <text class="bx" x="458" y="198">tokenStorage singleton over localStorage</text>
+  <text class="mn" x="458" y="213">auth_token · refresh_token · _expiry</text>
+
+  <rect x="824" y="118" width="360" height="100" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text class="bt" x="838" y="140">API Client</text>
+  <text class="bx" x="838" y="160">lib/api/client.ts — native fetch wrapper</text>
+  <text class="mn" x="838" y="179">base: NEXT_PUBLIC_API_URL</text>
+  <text class="mn" x="838" y="194">Authorization: Bearer &lt;jwt&gt;</text>
+  <text class="bx" x="838" y="210">Typed ApiError { status, code, details }</text>
+
+  <rect x="1204" y="118" width="372" height="100" rx="8" fill="#ffffff" stroke="#93c5fd" stroke-width="1.5"/>
+  <text class="bt" x="1218" y="140">Dashboard Shell</text>
+  <text class="bx" x="1218" y="160">app/dashboard/layout.tsx → DashboardShell</text>
+  <text class="mn" x="1218" y="179">/dashboard  discover   favorites  history</text>
+  <text class="mn" x="1218" y="194">library  profile  reading-list  search</text>
+  <text class="mn" x="1218" y="209">recommendations  settings</text>
+
+  <!-- Client -> API -->
+  <line x1="820" y1="238" x2="820" y2="258" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arBlue)"/>
+  <rect x="700" y="228" width="240" height="20" rx="4" fill="#ffffff" opacity="0.92"/>
+  <text class="lbl" x="820" y="242" text-anchor="middle" fill="#2563eb">HTTPS · REST/JSON · Bearer JWT</text>
+
+  <!-- ==================== API LAYER ==================== -->
+  <rect x="40" y="258" width="1560" height="320" rx="12" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+  <text class="bl" x="56" y="279">APPLICATION LAYER — FastAPI 0.136</text>
+  <text class="note" x="1584" y="279" text-anchor="end">apps/api/app/main.py · lifespan startup · custom OpenAPI · global exception handler</text>
+
+  <rect x="64" y="288" width="496" height="52" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="78" y="309">CORSMiddleware</text>
+  <text class="bx" x="78" y="328">ALLOWED_ORIGINS / METHODS / HEADERS from settings</text>
+
+  <rect x="572" y="288" width="496" height="52" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="586" y="309">MonitoringMiddleware</text>
+  <text class="bx" x="586" y="328">auto-tracks every request → Prometheus + monitor</text>
+
+  <rect x="1080" y="288" width="496" height="52" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="1094" y="309">Request Logging</text>
+  <text class="bx" x="1094" y="328">@app.middleware("http") · X-Process-Time header</text>
+
+  <rect x="64" y="352" width="1512" height="44" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="78" y="370">FastAPI Application</text>
+  <text class="bx" x="78" y="387">lifespan(): validate ML artifacts → init MLServiceRegistry (lazy) → init monitoring · shutdown flushes logs</text>
+
+  <rect x="64" y="408" width="1512" height="56" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="78" y="428">Routers mounted under /api/v1</text>
+  <text class="mn" x="78" y="445">/auth  /books  /authors  /favorites  /history  /onboarding  /recommendation  /recommendations  /health</text>
+  <text class="mn" x="78" y="459">app-level:  /  /health  /info  /version  /artifacts  /metrics  /monitor/{metrics,summary,alerts}  /admin/{reload,registry}</text>
+
+  <rect x="64" y="476" width="1512" height="48" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="78" y="495">Service Layer</text>
+  <text class="bx" x="78" y="513">auth_service · author_service · author_discovery_service · preference_builder · cache_service · monitoring · recommendation_metrics · recommendation_monitor</text>
+
+  <rect x="64" y="536" width="1512" height="34" rx="8" fill="#ffffff" stroke="#86efac" stroke-width="1.5"/>
+  <text class="bt" x="78" y="558">Repository Layer</text>
+  <text class="bx" x="420" y="558">BaseRepository · AuthorRepository · UserPreferenceRepository · UserFollowedAuthorRepository → SQLAlchemy ORM</text>
+
+  <!-- API -> ML -->
+  <line x1="820" y1="578" x2="820" y2="598" stroke="#059669" stroke-width="2.5" marker-end="url(#arGreen)"/>
+  <rect x="700" y="568" width="240" height="20" rx="4" fill="#ffffff" opacity="0.92"/>
+  <text class="lbl" x="820" y="582" text-anchor="middle" fill="#059669">service registry lookup</text>
+
+  <!-- API -> Data (left corridor) -->
+  <path d="M 64 553 L 26 553 L 26 1013 L 64 1013" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#ar)"/>
+  <text class="lbl" x="16" y="640" text-anchor="middle" transform="rotate(-90 16 640)">reads / writes via SQLAlchemy</text>
+
+  <!-- ==================== ML LAYER ==================== -->
+  <rect x="40" y="598" width="1560" height="300" rx="12" fill="#fffbeb" stroke="#fde68a" stroke-width="1.5"/>
+  <text class="bl" x="56" y="619">ML / RECOMMENDATION LAYER — apps/api/ml</text>
+  <text class="note" x="1584" y="619" text-anchor="end">lazy-loaded singletons · in-process caching · graceful degradation</text>
+
+  <rect x="64" y="628" width="1512" height="44" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.5"/>
+  <text class="bt" x="78" y="647">MLServiceRegistry</text>
+  <text class="bx" x="230" y="647">singleton · load_all() · reload() · reload_service() · health() · get_stats()  — services load on first access</text>
+  <text class="mn" x="78" y="664">get_service_registry() · get_popularity_service() · get_content_service() · get_collaborative_service() · get_hybrid_recommender()</text>
+
+  <rect x="64" y="684" width="488" height="104" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.5"/>
+  <text class="bt" x="78" y="705">PopularityService</text>
+  <text class="mn" x="78" y="723">ml/popularity/popularity_service.py</text>
+  <text class="bx" x="78" y="741">PopularityRecommender(BaseRecommender)</text>
+  <text class="bx" x="78" y="758">min_ratings=50 · diversity_weight=0.3 · recency_weight=0.2</text>
+  <text class="bx" x="78" y="775">homepage() · trending() · category() · cold_start() · explain()</text>
+
+  <rect x="568" y="684" width="488" height="104" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.5"/>
+  <text class="bt" x="582" y="705">ContentService</text>
+  <text class="mn" x="582" y="723">ml/content/content_service.py</text>
+  <text class="bx" x="582" y="741">ContentRecommender + FaissRetriever</text>
+  <text class="bx" x="582" y="758">all-MiniLM-L6-v2 · 384-dim · IndexFlatIP (cosine)</text>
+  <text class="bx" x="582" y="775">recommend_by_isbn / _title / _text · explain() · similar()</text>
+
+  <rect x="1072" y="684" width="504" height="104" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.5"/>
+  <text class="bt" x="1086" y="705">CollaborativeService</text>
+  <text class="mn" x="1086" y="723">ml/collaborative/collaborative_service.py</text>
+  <text class="bx" x="1086" y="741">CollaborativeRecommender — implicit ALS</text>
+  <text class="bx" x="1086" y="758">factors=64 · regularization=0.05 · iterations=20</text>
+  <text class="bx" x="1086" y="775">recommend_for_user() · similar_books() · similar_users()</text>
+
+  <rect x="64" y="800" width="1104" height="56" rx="8" fill="#fff7ed" stroke="#fb923c" stroke-width="2"/>
+  <text class="bt" x="78" y="821" fill="#9a3412">HybridRecommender — weighted score fusion</text>
+  <text class="mn" x="78" y="840">hybrid_score = 0.50·collab_z + 0.30·content_z + 0.20·popularity_z   (each signal min-max normalized to [0,1])</text>
+  <text class="bx" x="78" y="854">cold-start fallback to popularity · exclude_authors filter · min_score threshold · rank + explanation reason</text>
+
+  <rect x="1184" y="800" width="392" height="56" rx="8" fill="#ffffff" stroke="#fcd34d" stroke-width="1.5"/>
+  <text class="bt" x="1198" y="821">Evaluation</text>
+  <text class="mn" x="1198" y="838">ml/evaluation/metrics.py</text>
+  <text class="bx" x="1198" y="854">P@K · R@K · MAP@K · NDCG@K · MRR · coverage · novelty</text>
+
+  <text class="note" x="78" y="884">Offline pipeline that produces the artifacts consumed here: raw datasets → cleaning → integration/dedup → embeddings + interaction matrix → training → evaluation (see ml-data-pipeline.svg)</text>
+
+  <!-- ML -> Data -->
+  <line x1="820" y1="898" x2="820" y2="918" stroke="#b45309" stroke-width="2.5" marker-end="url(#arAmber)"/>
+  <rect x="690" y="888" width="260" height="20" rx="4" fill="#ffffff" opacity="0.92"/>
+  <text class="lbl" x="820" y="902" text-anchor="middle" fill="#b45309">loads indexes / models / parquet</text>
+
+  <!-- ==================== DATA LAYER ==================== -->
+  <rect x="40" y="918" width="1560" height="170" rx="12" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="1.5"/>
+  <text class="bl" x="56" y="939">PERSISTENCE LAYER</text>
+  <text class="note" x="1584" y="939" text-anchor="end">PostgreSQL 16 · Redis 7 · FAISS index · serialized model artifacts</text>
+
+  <rect x="64" y="948" width="376" height="130" rx="8" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text class="bt" x="78" y="970">PostgreSQL 16</text>
+  <text class="bx" x="78" y="990">users · authors · books</text>
+  <text class="bx" x="78" y="1004">user_profiles · user_preferences</text>
+  <text class="bx" x="78" y="1018">user_book_interactions</text>
+  <text class="bx" x="78" y="1032">user_favorite_books</text>
+  <text class="bx" x="78" y="1046">user_followed_authors</text>
+  <text class="bx" x="78" y="1060">search_history</text>
+  <text class="bx" x="78" y="1074">recommendation_event / _click</text>
+
+  <rect x="452" y="948" width="376" height="130" rx="8" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text class="bt" x="466" y="970">Redis 7</text>
+  <text class="bx" x="466" y="990">Cache tier — redis://…:6379, TTL 3600s</text>
+  <text class="bx" x="466" y="1006">maxmemory 256mb · allkeys-lru · appendonly</text>
+  <text class="bx" x="466" y="1024">caches recommendation results and</text>
+  <text class="bx" x="466" y="1038">frequently requested book payloads</text>
+  <text class="bx" x="466" y="1056">health-probed via redis_client.ping()</text>
+
+  <rect x="840" y="948" width="376" height="130" rx="8" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text class="bt" x="854" y="970">FAISS Vector Index</text>
+  <text class="mn" x="854" y="989">ml/artifacts/books_faiss.index</text>
+  <text class="mn" x="854" y="1004">ml/artifacts/book_embeddings.npy</text>
+  <text class="mn" x="854" y="1019">ml/artifacts/semantic_books.parquet</text>
+  <text class="bx" x="854" y="1037">384-dim L2-normalized · inner-product search</text>
+  <text class="bx" x="854" y="1055">248,176 indexed book vectors</text>
+  <text class="bx" x="854" y="1071">memoized via @lru_cache get_artifacts()</text>
+
+  <rect x="1228" y="948" width="348" height="130" rx="8" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.5"/>
+  <text class="bt" x="1242" y="970">Model Artifacts</text>
+  <text class="mn" x="1242" y="989">als_model.pkl</text>
+  <text class="mn" x="1242" y="1004">user_encoder.pkl · book_encoder.pkl</text>
+  <text class="mn" x="1242" y="1019">collaborative_metadata.pkl</text>
+  <text class="mn" x="1242" y="1034">embedding_metadata.pkl</text>
+  <text class="mn" x="1242" y="1049">train/test_interactions.parquet</text>
+  <text class="bx" x="1242" y="1069">validated at startup by ArtifactValidator</text>
+
+  <!-- ==================== OBSERVABILITY ==================== -->
+  <rect x="40" y="1108" width="1560" height="150" rx="12" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="bl" x="56" y="1129">OBSERVABILITY + INFRASTRUCTURE</text>
+  <text class="note" x="1584" y="1129" text-anchor="end">Docker Compose (infrastructure/compose/docker-compose.dev.yml)</text>
+
+  <rect x="64" y="1138" width="360" height="100" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="bt" x="78" y="1160">Prometheus</text>
+  <text class="bx" x="78" y="1180">scrapes api:8000/metrics every 15s</text>
+  <text class="mn" x="78" y="1199">recommendations_generated_total</text>
+  <text class="mn" x="78" y="1214">recommendation_duration_seconds</text>
+  <text class="mn" x="78" y="1229">cache_operations_total · request_duration</text>
+
+  <rect x="440" y="1138" width="360" height="100" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="bt" x="454" y="1160">Grafana</text>
+  <text class="bx" x="454" y="1180">provisioned datasource + dashboards</text>
+  <text class="mn" x="454" y="1199">…/grafana/provisioning/datasources</text>
+  <text class="mn" x="454" y="1214">…/grafana/provisioning/dashboards</text>
+  <text class="bx" x="454" y="1230">admin console on port 3000 (profile: monitoring)</text>
+
+  <rect x="816" y="1138" width="360" height="100" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="bt" x="830" y="1160">In-App Monitoring</text>
+  <text class="mn" x="830" y="1179">/monitor/metrics  ·  /monitor/summary</text>
+  <text class="mn" x="830" y="1194">/monitor/alerts   ·  /admin/registry</text>
+  <text class="bx" x="830" y="1213">RecommendationMonitor — latency, error rate,</text>
+  <text class="bx" x="830" y="1229">alert thresholds, structured log flushing</text>
+
+  <rect x="1192" y="1138" width="384" height="100" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text class="bt" x="1206" y="1160">Supporting Services</text>
+  <text class="bx" x="1206" y="1180">node-exporter :9100 · cadvisor :8080</text>
+  <text class="bx" x="1206" y="1197">pgAdmin :5050 (profile: dev/tools)</text>
+  <text class="bx" x="1206" y="1214">CI/CD: GitHub Actions (ci.yml, api.yml)</text>
+  <text class="bx" x="1206" y="1231">network book_network (bridge)</text>
+
+  <!-- Legend -->
+  <text class="lg" x="56" y="1288">
+    Solid arrows = synchronous request flow. Dashed arrow = ORM persistence access. Layer colours group deployment concerns, not network boundaries — the whole application layer deploys as one process plus Postgres, Redis and the artifact volume.
+  </text>
+</svg>

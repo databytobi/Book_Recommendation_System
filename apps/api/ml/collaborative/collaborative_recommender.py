@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # PATHS
 # ============================================================
 
-BASE_DIR = Path(__file__).resolve().parents[4]
+BASE_DIR = Path(__file__).resolve().parents[1]
 
 DATA_DIR = BASE_DIR / "data" / "processed"
 ARTIFACT_DIR = BASE_DIR / "apps" / "api" / "ml" / "artifacts"

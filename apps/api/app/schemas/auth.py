@@ -322,30 +322,18 @@ class UserResponse(BaseModel):
     """
     id: int = Field(..., description="User's unique identifier")
     email: str = Field(..., description="User's email address")
-    username: Optional[str] = Field(None, description="User's chosen username")
+    # FIX: Make full_name optional
     full_name: Optional[str] = Field(None, description="User's full name")
-    role: UserRole = Field(default=UserRole.USER, description="User's role")
-    account_status: AccountStatus = Field(default=AccountStatus.ACTIVE, description="Account status")
-    is_verified: bool = Field(default=False, description="Whether email is verified")
-    created_at: datetime = Field(..., description="Account creation timestamp")
-    last_login: Optional[datetime] = Field(None, description="Last login timestamp")
     
-    model_config = ConfigDict(
-        from_attributes=True,
-        json_schema_extra={
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "email": "user@example.com",
-                "username": "johndoe",
-                "full_name": "John Doe",
-                "role": "user",
-                "account_status": "active",
-                "is_verified": True,
-                "created_at": "2024-01-01T00:00:00Z",
-                "last_login": "2024-01-01T12:00:00Z"
-            }
-        }
-    )
+    # Optional fields
+    username: Optional[str] = Field(None, description="User's chosen username")
+    role: UserRole = Field(default=UserRole.USER, description="User's role")
+    account_status: Optional[AccountStatus] = Field(None, description="User's account status")
+    is_verified: bool = Field(default=False, description="Whether email is verified")
+    created_at: Optional[datetime] = Field(None, description="Account creation timestamp")
+    last_login: Optional[datetime] = Field(None, description="Last login timestamp")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
@@ -379,7 +367,7 @@ class TokenResponse(BaseModel):
                 "token_type": "bearer",
                 "expires_in": 3600,
                 "user": {
-                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "id": 1,
                     "email": "user@example.com",
                     "username": "johndoe",
                     "full_name": "John Doe",
@@ -588,7 +576,7 @@ if __name__ == "__main__":
     # Test 4: Token response
     print("\n📌 Test 4: Token Response")
     user_data = {
-        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "id": 1,
         "email": "user@example.com",
         "username": "johndoe",
         "full_name": "John Doe",

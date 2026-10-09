@@ -1,3 +1,54 @@
 [tool.black]
 line-length = 88
-target-version = "py312"
+# Must be a LIST, and must match the interpreter the project actually runs on:
+# the API Docker image and CI both use Python 3.11. This was previously the
+# string "py312", which made every `black` invocation fail with
+# "Config key target-version must be a list".
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+# Vendor and generated trees are never linted.
+extend-exclude = [
+    "venv",
+    ".venv",
+    "alembic/versions",
+    "**/__pycache__",
+]
+
+[tool.ruff.lint]
+# Focused on correctness, not cosmetics. The codebase has ~4,500 pre-existing
+# whitespace/import-order findings (W291/W293/W292/I001); blocking CI on those
+# would mean 3,700 unrelated reformats, so they are excluded here. The rules
+# that remain catch real defects: undefined names, unreachable/duplicate
+# definitions, and invalid comparisons.
+select = [
+    "F821",  # undefined name          -> would raise NameError at runtime
+    "F601",  # repeated dict key       -> silently drops a value
+    "F602",  # repeated dict key (var)
+    "F811",  # redefinition of unused  -> shadowed definition
+    "F823",  # local used before assignment
+    "F501",  # invalid % format string
+    "F502",  # % format expected mapping
+    "F522",  # too many args for format
+]
+
+# Deliberately NOT enabled:
+#   E402 - ML modules must mutate sys.path before importing local deps.
+#   E712 - ruff suggests `not UserFavoriteBook.is_deleted` for
+#          `UserFavoriteBook.is_deleted == False`. That rewrite is WRONG for
+#          SQLAlchemy filter expressions, which need a real SQL comparison
+#          rather than Python truthiness. Enabling it would invite a bug.
+#   E722 - bare `except` is a code smell but not a deployment blocker.
+#   W291/W293/W292/I001 - ~4,500 pre-existing cosmetic findings.
+
+[tool.ruff.lint.per-file-ignores]
+"apps/api/tests/**" = ["F811"]
+"scripts/**" = ["F811"]
+
+[tool.pytest.ini_options]
+# Note: pytest settings live in the root pytest.ini. This block exists so
+# tools that only read pyproject.toml still discover the test suite.
+testpaths = ["apps/api/tests"]
+asyncio_mode = "auto"

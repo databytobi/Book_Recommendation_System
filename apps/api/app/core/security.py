@@ -65,9 +65,15 @@ class TokenData(BaseModel):
 
 class SecurityConfig:
     """Security configuration."""
-    
-    # JWT Settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY") or settings.SECRET_KEY or "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_IN_ENV"
+
+    # JWT Settings.
+    # settings.SECRET_KEY is validated at import time: in staging/production
+    # Config raises rather than falling back to a public placeholder, so by the
+    # time this module is imported the value is guaranteed to be usable there.
+    # Outside those environments a development fallback keeps local setup simple.
+    _DEV_FALLBACK_SECRET = "dev-only-insecure-secret-do-not-use-in-production"
+
+    SECRET_KEY: str = os.getenv("SECRET_KEY") or settings.SECRET_KEY or _DEV_FALLBACK_SECRET
     ALGORITHM: str = os.getenv("JWT_ALGORITHM") or settings.JWT_ALGORITHM or "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRATION_MINUTES") or settings.JWT_EXPIRATION_MINUTES or 1440)
     

@@ -7,7 +7,6 @@ additional metadata for notification preferences and engagement tracking.
 Phase: Database Models
 """
 
-from ctypes import Union
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Union
 import json

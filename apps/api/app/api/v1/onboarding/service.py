@@ -13,9 +13,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 import logging
+from datetime import datetime
 
 from app.models.author import Author
 from app.models.user_followed_author import UserFollowedAuthor
+from app.models.user_profile import UserProfile
+from app.models.user_preference import UserPreference
+from app.models.user_favorite_book import UserFavoriteBook
 
 logger = logging.getLogger(__name__)
 
@@ -439,3 +443,293 @@ class OnboardingService:
         except SQLAlchemyError as e:
             logger.error(f"Database error in get_author_recommendations: {e}")
             raise
+
+    def complete_onboarding(
+        self,
+        user_id: str,
+        request,
+    ):
+        """
+        Save all onboarding selections and mark onboarding complete.
+        """
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            profile = UserProfile.create(user_id=user_id)
+            self.db.add(profile)
+
+        # Save profile preferences
+        profile.set_favorite_genres(request.preferred_genres)
+        profile.set_favorite_authors(request.favorite_authors)
+
+        # Replace previous favorite books
+        (
+            self.db.query(UserFavoriteBook)
+            .filter(UserFavoriteBook.user_id == user_id)
+            .delete()
+        )
+
+        for isbn in request.favorite_books:
+            self.db.add(
+                UserFavoriteBook(
+                    user_id=user_id,
+                    isbn=isbn,
+                )
+            )
+
+        profile.preferred_language = (
+            request.preferred_language.value
+            if hasattr(request.preferred_language, "value")
+            else request.preferred_language or "en"
+        )
+
+        profile.reading_style = (
+            request.reading_style.value
+            if hasattr(request.reading_style, "value")
+            else request.reading_style or "balanced"
+        )
+
+        profile.reading_goals = (
+            request.reading_goal.value
+            if hasattr(request.reading_goal, "value")
+            else request.reading_goal or "moderate"
+        )
+
+        # FIX: Use the model method to complete onboarding
+        # profile.onboarding_completed = True
+        # self.db.commit()
+        
+        # Use the model method
+        profile.complete_onboarding()
+
+        self.db.add(profile)
+        self.db.commit()
+        self.db.refresh(profile)
+
+        logger.info(
+            f"After commit -> onboarding_completed={profile.onboarding_completed}"
+        )
+
+        return {
+            "success": True
+        }
+
+    def save_progress(
+        self,
+        user_id: str,
+        request,
+    ):
+        """
+        Save onboarding progress without marking it complete.
+        """
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            profile = UserProfile.create(user_id=user_id)
+            self.db.add(profile)
+
+        profile.set_favorite_genres(request.preferred_genres)
+        profile.set_favorite_authors(request.favorite_authors)
+
+        # Replace previous favorite books
+        (
+            self.db.query(UserFavoriteBook)
+            .filter(UserFavoriteBook.user_id == user_id)
+            .delete()
+        )
+
+        for isbn in request.favorite_books:
+            self.db.add(
+                UserFavoriteBook(
+                    user_id=user_id,
+                    isbn=isbn,
+                )
+            )
+
+        profile.preferred_language = (
+            request.preferred_language.value
+            if request.preferred_language
+            else "en"
+        )
+
+        profile.reading_style = (
+            request.reading_style.value
+            if request.reading_style
+            else "balanced"
+        )
+
+        profile.reading_goals = (
+            request.reading_goal.value
+            if request.reading_goal
+            else "moderate"
+        )
+
+        self.db.commit()
+
+    def get_completed_steps(self, user_id: str):
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            return []
+
+        steps = ["welcome"]
+
+        if profile.get_favorite_genres():
+            steps.append("genres")
+
+        if profile.get_favorite_authors():
+            steps.append("authors")
+
+        favorite_books = (
+            self.db.query(UserFavoriteBook)
+            .filter(UserFavoriteBook.user_id == user_id)
+            .count()
+        )
+
+        if favorite_books > 0:
+            steps.append("books")
+
+        if profile.reading_goals:
+            steps.append("reading_goal")
+
+        if profile.onboarding_completed:
+            steps.append("complete")
+
+        return steps
+
+    def get_status(self, user_id: str):
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            return None
+
+        # FIX: If onboarding is complete, return complete status immediately
+        if profile.onboarding_completed:
+            return {
+                "current_step": "complete",
+                "completed_steps": [
+                    "welcome",
+                    "genres",
+                    "authors",
+                    "books",
+                    "reading_goal",
+                    "complete",
+                ],
+                "total_steps": 6,
+            }
+
+        completed = self.get_completed_steps(user_id)
+
+        all_steps = [
+            "welcome",
+            "genres",
+            "authors",
+            "books",
+            "reading_goal",
+            "complete",
+        ]
+
+        current_step = "welcome"
+
+        for step in all_steps:
+            if step not in completed:
+                current_step = step
+                break
+
+        return {
+            "current_step": current_step,
+            "completed_steps": completed,
+            "total_steps": len(all_steps),
+        }
+
+    def skip(self, user_id: str):
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            profile = UserProfile.create(user_id=user_id)
+            self.db.add(profile)
+
+        profile.onboarding_completed = True
+
+        self.db.commit()
+
+        return {
+            "skipped_at": datetime.utcnow().isoformat()
+        }
+
+    def get_preferences(self, user_id: str):
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            return None
+
+        favorite_books = (
+            self.db.query(UserFavoriteBook)
+            .filter(UserFavoriteBook.user_id == user_id)
+            .all()
+        )
+
+        favorite_book_isbns = [
+            book.isbn
+            for book in favorite_books
+        ]
+
+        return {
+            "preferred_genres": profile.get_favorite_genres(),
+            "favorite_authors": profile.get_favorite_authors(),
+            "favorite_books": favorite_book_isbns,
+            "reading_goal": profile.reading_goals,
+            "reading_style": profile.reading_style,
+            "preferred_language": profile.preferred_language,
+            "theme": "dark",
+        }
+
+    def reset(self, user_id: str):
+
+        profile = (
+            self.db.query(UserProfile)
+            .filter(UserProfile.user_id == user_id)
+            .first()
+        )
+
+        if profile is None:
+            return
+
+        profile.set_favorite_genres([])
+        profile.set_favorite_authors([])
+
+        profile.reading_goals = None
+        profile.reading_style = "balanced"
+        profile.onboarding_completed = False
+
+        self.db.commit()

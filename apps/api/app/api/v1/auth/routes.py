@@ -12,6 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 
+# from app.dependencies import get_current_user as get_authenticated_user
+from app.dependencies.auth import get_current_user as get_authenticated_user
+from app.models.user import User
+
 from app.core.database import get_db
 from app.schemas.auth import (
     RegisterRequest,
@@ -23,7 +27,9 @@ from app.schemas.auth import (
     PasswordResetConfirmRequest,
     EmailVerificationRequest,
     AuthErrorResponse,
-    create_auth_response,
+    # NOTE: create_auth_response is defined locally in this module (below),
+    # which shadowed the import from schemas.auth. The local definition is
+    # the one in use, so the import was redundant.
     create_error_response
 )
 from app.services.auth_service import (
@@ -235,12 +241,11 @@ async def login(
             refresh_token=refresh_token,
             user=UserResponse.model_validate(user).model_dump(),
             expires_in=3600 if not hasattr(payload, 'remember_me') or not payload.remember_me else 2592000  # 30 days
-        )#.model_dump()
+        )
+        # NOTE: two lines previously followed the return above, logging and
+        # returning an undefined `response` variable. They were unreachable
+        # dead code that referenced a name never assigned in this scope.
 
-        logger.debug(f"Response: {response.model_dump()}")
-
-        return response
-        
     except Exception as e:
         logger.error(f"Login error: {e}", exc_info=True)
         raise handle_auth_error(e)
@@ -558,16 +563,11 @@ async def resend_verification(
 @router.get(
     "/me",
     response_model=UserResponse,
-    responses={
-        200: {"description": "User data retrieved"},
-        401: {"description": "Unauthorized", "model": AuthErrorResponse}
-    },
     summary="Get current user",
-    description="Get the current authenticated user's data"
+    description="Get the current authenticated user's data",
 )
 async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_authenticated_user),
 ) -> Dict[str, Any]:
     """
     Get current user data.
@@ -576,38 +576,11 @@ async def get_current_user(
     
     Parameters:
     -----------
-    request : Request
-        HTTP request containing the authorization header
+    current_user : User
+        Current authenticated user (injected from dependency)
     
     Returns:
     --------
     UserResponse: Current user data
-    
-    Raises:
-    -------
-    HTTPException: If token is invalid or user not found
     """
-    try:
-        # Extract token from Authorization header
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Missing or invalid authorization header"
-            )
-        
-        token = auth_header.split(" ")[1]
-        
-        service = AuthService(db)
-        user = service.get_current_user(token)
-        
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token"
-            )
-        
-        return UserResponse.model_validate(user).model_dump()
-        
-    except Exception as e:
-        raise handle_auth_error(e)
+    return UserResponse.model_validate(current_user).model_dump()

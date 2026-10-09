@@ -169,6 +169,44 @@ class PopularityRecommender(BaseRecommender):
         # Calculate global mean rating
         self.global_mean = ratings_summary["average_rating"].mean()
         print(f"Global mean rating: {self.global_mean:.2f}")
+
+        # ------------------------------------------------------------------
+        # Prefer catalog popularity over interaction-sample counts
+        # ------------------------------------------------------------------
+        # `train_interactions.parquet` is very sparse: ~272k ratings spread
+        # across ~136k distinct books, i.e. roughly two per book. Counting
+        # ratings from that sample and then discarding everything below
+        # `min_ratings` shrank the entire pool to 208 books out of a 248k
+        # catalog, so trending kept surfacing the same handful of titles.
+        #
+        # The catalog itself carries the authoritative Goodreads popularity
+        # (`ratings_count`, up to 2.5M). When those columns are present we
+        # rank on them instead, which restores the pool to catalog scale.
+        # Books lacking a catalog rating simply remain below the threshold,
+        # exactly as before.
+        if (
+            books_df is not None
+            and "ratings_count" in books_df.columns
+            and "average_rating" in books_df.columns
+        ):
+            catalog = books_df[["isbn", "ratings_count", "average_rating"]].copy()
+            catalog["ratings_count"] = pd.to_numeric(
+                catalog["ratings_count"], errors="coerce"
+            )
+            catalog["average_rating"] = pd.to_numeric(
+                catalog["average_rating"], errors="coerce"
+            )
+            catalog = catalog.dropna(subset=["ratings_count", "average_rating"])
+            catalog = catalog[catalog["ratings_count"] > 0]
+
+            if len(catalog):
+                print(
+                    "Popularity source: catalog ratings_count "
+                    f"({len(catalog):,} books carry a catalog rating)"
+                )
+                ratings_summary = catalog
+                self.global_mean = float(catalog["average_rating"].mean())
+                print(f"Global mean rating (catalog): {self.global_mean:.2f}")
         
         # Filter books below minimum rating threshold
         qualified = ratings_summary[
@@ -283,9 +321,14 @@ class PopularityRecommender(BaseRecommender):
         else:
             result_df = self.popularity_df.head(top_k)
         
-        # Prepare output with required columns - ADD ratings_count here
+        # Prepare output with required columns - ADD ratings_count here.
+        # image_url_* must be carried through as well: they are merged into
+        # popularity_df during fit(), but omitting them here meant every
+        # trending/homepage recommendation reached the API without a cover and
+        # the UI rendered placeholder images.
         columns = ["isbn", "title", "authors", "category", "average_rating", 
-                   "ratings_count", "weighted_score", "adjusted_score", "publication_year"]
+                   "ratings_count", "weighted_score", "adjusted_score", "publication_year",
+                   "image_url_s", "image_url_m", "image_url_l", "publisher"]
         available_columns = [col for col in columns if col in result_df.columns]
         
         # Make sure ratings_count is included
@@ -323,19 +366,27 @@ class PopularityRecommender(BaseRecommender):
         # Load default data
         import pandas as pd
         
-        # Go up from: apps/api/ml/popularity/popularity_recommender.py
-        # To: project_root (5 levels up: popularity -> ml -> api -> apps -> project_root)
-        project_root = Path(__file__).resolve().parents[4]
+        # Paths are resolved centrally (see apps/api/ml/paths.py).
+        # The previous code used Path(__file__).resolve().parents[4], which
+        # raised IndexError in the container layout: /app/ml/popularity only
+        # has three ancestors, so train() crashed before it could load data.
+        try:
+            from paths import ARTIFACT_DIR as _ARTIFACT_DIR
+            from paths import INTEGRATED_DIR as _INTEGRATED_DIR
+        except ImportError:  # executed as a standalone script
+            import sys as _sys
+            _sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+            from paths import ARTIFACT_DIR as _ARTIFACT_DIR
+            from paths import INTEGRATED_DIR as _INTEGRATED_DIR
         
         if train_path is None:
-            train_path = project_root / "apps" / "api" / "ml" / "artifacts" / "train_interactions.parquet"
+            train_path = _ARTIFACT_DIR / "train_interactions.parquet"
         
         if books_path is None:
-            books_path = project_root / "data" / "processed" / "integrated" / "master_books_deduplicated.parquet"
+            books_path = _INTEGRATED_DIR / "master_books_deduplicated.parquet"
             if not books_path.exists():
-                books_path = project_root / "data" / "processed" / "integrated" / "master_books.parquet"
+                books_path = _INTEGRATED_DIR / "master_books.parquet"
         
-        print(f"Project root: {project_root}")
         print(f"Looking for train data at: {train_path}")
         print(f"Looking for books data at: {books_path}")
         
