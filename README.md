@@ -1,6 +1,6 @@
 # 📚 Hybrid Book Recommendation System
 
-A full-stack book discovery platform: a FastAPI backend with a hybrid ML recommendation engine, a Next.js frontend, and a Dockerized infrastructure — serving a catalog of **248,176 books** with personalized recommendations, semantic search, favorites, and reading history.
+A full-stack book discovery platform: a FastAPI backend with a hybrid ML recommendation engine, a Next.js frontend, and a Dockerized infrastructure serving a catalog of **248,176 books** with personalized recommendations, semantic search, favorites, and reading history.
 
 <p align="center">
 
@@ -30,19 +30,19 @@ The system runs **two complementary recommenders**:
 
 ### A note on the data architecture
 
-**The book catalog lives in parquet, not PostgreSQL.** The `books` SQL table exists but is intentionally empty — all 248k book records are read from `data/processed/integrated/master_books_deduplicated.parquet` (exposed to the API as the cached `semantic_books` artifact). Only *user* state (accounts, profiles, favorites, interactions) lives in Postgres. This is the single most important thing to know when working in this codebase: routes that read book metadata must go through the parquet catalog (`BookService`), never the `books` table.
+**The book catalog lives in parquet, not PostgreSQL.** The `books` SQL table exists but is intentionally empty all 248k book records are read from `data/processed/integrated/master_books_deduplicated.parquet` (exposed to the API as the cached `semantic_books` artifact). Only *user* state (accounts, profiles, favorites, interactions) lives in Postgres. This is the single most important thing to know when working in this codebase: routes that read book metadata must go through the parquet catalog (`BookService`), never the `books` table.
 
 ---
 
 ## Features
 
-- **Personalized recommendations** — hybrid scoring with human-readable reasons ("From one of your favorite authors", "Readers with similar taste enjoyed this")
-- **Trending books** — popularity pool of 3,069 strongly-rated titles with category diversity so no single series dominates
-- **Search** — title/author search across the full catalog, plus ML semantic search
-- **Favorites & history** — persisted per user, validated against the catalog
-- **Onboarding flow** — captures favorite authors, favorite books, reading style, and reading goals
-- **Book covers** — served from Amazon's CDN with URL normalization (the legacy `images.amazon.com` host returns 403; URLs are rewritten to `images-na.ssl-images-amazon.com`)
-- **Derived genres** — no source dataset contains genre data, so genres are inferred at read time (see [Known Limitations](#known-limitations))
+- **Personalized recommendations**: hybrid scoring with human-readable reasons ("From one of your favorite authors", "Readers with similar taste enjoyed this")
+- **Trending books**: popularity pool of 3,069 strongly-rated titles with category diversity so no single series dominates
+- **Search**: title/author search across the full catalog, plus ML semantic search
+- **Favorites & history**: persisted per user, validated against the catalog
+- **Onboarding flow**: captures favorite authors, favorite books, reading style, and reading goals
+- **Book covers**: served from Amazon's CDN with URL normalization (the legacy `images.amazon.com` host returns 403; URLs are rewritten to `images-na.ssl-images-amazon.com`)
+- **Derived genres**: no source dataset contains genre data, so genres are inferred at read time (see [Known Limitations](#known-limitations))
 - **JWT auth** — register/login/refresh, with a `user_profiles` row created at registration
 
 ---
@@ -54,7 +54,7 @@ The system runs **two complementary recommenders**:
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - ~4 GB RAM for the stack
 
-### 1. Get the data (required — it is git-ignored)
+### 1. Get the data (required it is git-ignored)
 
 The catalog, ratings, and ML artifacts are **not in the repository**. You need:
 
@@ -193,7 +193,7 @@ docker compose -f infrastructure/compose/docker-compose.dev.yml --profile tools 
 
 | Profile | Adds |
 |---|---|
-| `tools` (or `dev`) | pgAdmin — Postgres admin UI at http://localhost:5050 |
+| `tools` (or `dev`) | pgAdmin Postgres admin UI at http://localhost:5050 |
 | `ml` (or `training`) | One-shot ML training container |
 | `monitoring` | Prometheus (9090), Grafana, node-exporter, cAdvisor |
 
@@ -208,7 +208,7 @@ docker compose -f infrastructure/compose/docker-compose.dev.yml --profile tools 
 Being upfront about the current state of the system:
 
 - **Genres are inferred, not sourced.** Neither raw dataset contains genre data. Genres are derived at read time in [`apps/api/app/core/genres.py`](apps/api/app/core/genres.py) using word-boundary keyword matching plus publisher-imprint rules. Coverage is ~24% of the catalog; the rest return `null`. Real coverage would require an external join (e.g. Open Library bulk dumps, with ISBN-13 normalization).
-- **The popularity pool is 3,069 books** — only ~3.3k of the 248k catalog entries carry rating counts from Goodreads. Trending cannot rank books with no rating data.
+- **The popularity pool is 3,069 books** only ~3.3k of the 248k catalog entries carry rating counts from Goodreads. Trending cannot rank books with no rating data.
 - **Notifications are mock data.** The bell dropdown renders placeholder entries; there is no notifications backend.
 - **Search filters are not implemented.** The search UI accepts filters, but the API currently only supports free-text query.
 - **No password reset or email verification flow** — verification codes are generated but not sent.
@@ -217,11 +217,11 @@ Being upfront about the current state of the system:
 
 ## Documentation
 
-- [PROJECT_DOCUMENTATION.md](docs/PROJECT_DOCUMENTATION.md) — full project reference
-- [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) — Docker and production deployment
-- [RISKS.md](docs/RISKS.md) — known risks, including the missing genre column
-- [technical_decisions.md](docs/technical_decisions.md) — architecture decisions
-- [METRICS.md](docs/METRICS.md) / [SUCCESS_METRICS.md](docs/SUCCESS_METRICS.md) — quality metrics
+- [PROJECT_DOCUMENTATION.md](docs/PROJECT_DOCUMENTATION.md): full project reference
+- [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md): Docker and production deployment
+- [RISKS.md](docs/RISKS.md): known risks, including the missing genre column
+- [technical_decisions.md](docs/technical_decisions.md): architecture decisions
+- [METRICS.md](docs/METRICS.md) / [SUCCESS_METRICS.md](docs/SUCCESS_METRICS.md): quality metrics
 
 ---
 
