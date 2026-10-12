@@ -211,7 +211,7 @@ Being upfront about the current state of the system:
 - **The popularity pool is 3,069 books** only ~3.3k of the 248k catalog entries carry rating counts from Goodreads. Trending cannot rank books with no rating data.
 - **Notifications are mock data.** The bell dropdown renders placeholder entries; there is no notifications backend.
 - **Search filters are not implemented.** The search UI accepts filters, but the API currently only supports free-text query.
-- **No password reset or email verification flow** — verification codes are generated but not sent.
+- **No password reset or email verification flow** verification codes are generated but not sent.
 
 ---
 
