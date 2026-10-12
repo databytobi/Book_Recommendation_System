@@ -43,7 +43,7 @@ The system runs **two complementary recommenders**:
 - **Onboarding flow**: captures favorite authors, favorite books, reading style, and reading goals
 - **Book covers**: served from Amazon's CDN with URL normalization (the legacy `images.amazon.com` host returns 403; URLs are rewritten to `images-na.ssl-images-amazon.com`)
 - **Derived genres**: no source dataset contains genre data, so genres are inferred at read time (see [Known Limitations](#known-limitations))
-- **JWT auth** — register/login/refresh, with a `user_profiles` row created at registration
+- **JWT auth**: register/login/refresh, with a `user_profiles` row created at registration
 
 ---
 
@@ -62,12 +62,12 @@ The catalog, ratings, and ML artifacts are **not in the repository**. You need:
    - **Book-Crossing dataset** (`Books.csv`, `Ratings.csv`, `Users.csv`)
    - **Goodreads dataset** (`books.csv`)
 2. Run the data pipeline to produce `data/processed/`:
-   - Cleaning: `scripts/data/scripts_cleaning/` — `clean_books.py`, `clean_goodreads.py`, `clean_ratings.py`, `clean_users.py`, `deduplicate_books.py`
-   - Integration: `scripts/data/integration/` — `merge_datasets.py`, `schema_validator.py`, `deduplicate_catalog.py` (produces `data/processed/integrated/master_books_deduplicated.parquet`)
+   - Cleaning: `scripts/data/scripts_cleaning/` : `clean_books.py`, `clean_goodreads.py`, `clean_ratings.py`, `clean_users.py`, `deduplicate_books.py`
+   - Integration: `scripts/data/integration/` : `merge_datasets.py`, `schema_validator.py`, `deduplicate_catalog.py` (produces `data/processed/integrated/master_books_deduplicated.parquet`)
 3. Generate the ML artifacts under `apps/api/ml/`:
-   - `features/interaction_matrix.py` — the training interactions
-   - `features/embedding_pipeline.py` — semantic embeddings + FAISS index (`semantic_books.parquet`)
-   - `train_popularity.py` — the popularity recommender model
+   - `features/interaction_matrix.py`: the training interactions
+   - `features/embedding_pipeline.py`: semantic embeddings + FAISS index (`semantic_books.parquet`)
+   - `train_popularity.py`: the popularity recommender model
 
 See [docs/PROJECT_DOCUMENTATION.md](docs/PROJECT_DOCUMENTATION.md) for the full pipeline description.
 
